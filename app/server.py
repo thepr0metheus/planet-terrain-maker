@@ -16,6 +16,7 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, request, send_from_directory
 
 from .apispec import Param, api, build
+from .asteroids import AsteroidShapes, BadShape, UnknownShape
 from .buildings import BuildingsUnavailable, Overpass
 from .copdem import CopError, CopernicusAws
 from .earth import Copernicus, KeyNeeded, SourceFailed
@@ -38,7 +39,8 @@ MAX_IMAGE = 4096                 # a planet picture a side, at most
 TILE_CACHE_BYTES = int(os.environ.get("TILE_CACHE_MB", "4096")) * 1024 * 1024
 
 # The page loads nothing from other sites: tiles, heights and names come through this server.
-CSP = ("default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; "
+# connect-src blob: lets the page read what it made itself: GLTFLoader reads a model's pictures from blobs
+CSP = ("default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; "
        "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 
 SOUTH = Param("south", "number", "South edge of the region, degrees.", True)
@@ -195,6 +197,7 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
     settings_store = Settings(data_dir / "settings.json")
     client_errors = ClientErrors(data_dir / "client-errors.jsonl")
     pictures = PictureSizes(data_dir / "cache" / "pictures", log=log)
+    asteroids = AsteroidShapes(fetcher, data_dir / "cache" / "asteroids", WEB / "data" / "asteroids-top.json", log=log)
 
     @app.errorhandler(BadRequest)
     def bad_request(e):
@@ -268,6 +271,33 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
         response = Response(found.body, mimetype=found.content_type)
         response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
         return response
+
+    # A shape of an asteroid, from one of its two lists; it does not change, so it is kept long.
+    def shape(get, what):
+        try:
+            body, content_type = get()
+        except UnknownShape as e:
+            return _error(404, str(e))
+        except (FetchError, BadShape) as e:
+            log(f"asteroid {what}: {e}")
+            return _error(502, f"{what}: {e}")
+        response = Response(body, mimetype=content_type)
+        response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
+        return response
+
+    @app.get("/api/asteroids/top/<asteroid_id>")
+    @api(responses={200: "The shape: a GLB model (NASA's) or vertices and facets as OBJ text (JAXA's, the radar models).",
+                    404: "No such asteroid in the list.", 502: "Where the shape lives did not give it, or gave something else."})
+    def asteroid_top(asteroid_id):
+        """One of the best known shapes of asteroids, by its id in web/data/asteroids-top.json, fetched once and kept on disk."""
+        return shape(lambda: asteroids.top(asteroid_id), asteroid_id)
+
+    @app.get("/api/asteroids/damit/<int:model_id>")
+    @api(responses={200: "The shape: vertices and facets as OBJ text, in no particular unit (the page sizes it).",
+                    404: "No such model.", 502: "DAMIT did not give it, or gave something else."})
+    def asteroid_damit(model_id):
+        """A shape of the DAMIT catalogue, by its model's number in web/data/asteroids-damit.json, fetched once and kept on disk."""
+        return shape(lambda: asteroids.damit(model_id), f"DAMIT {model_id}")
 
     @app.get("/api/earth/heights")
     @api(*BOX, CELLS, Param("source", "string", "aws: Copernicus DEM read from AWS Open Data, no key; opentopography "

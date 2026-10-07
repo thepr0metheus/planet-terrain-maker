@@ -12,6 +12,7 @@
 // The ruler is drawn over the view, not into it: no picture, video or file of the model has it.
 
 import { number, t } from './i18n.js';
+import { CarriedPoint } from './carry.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const NICE = [1, 2, 5, 10];
@@ -19,7 +20,6 @@ const LABEL_PX = 30;           // the numbered marks stand at least this far apa
 const TICK_PX = 7;             // and the small marks between them
 const TICK = { major: 9, minor: 5 };     // how long the marks are, px
 const MOST_MARKS = 200;        // more marks than this on the ruler: the small ones are left out
-const KEY_PX = 8;              // an arrow key carries a focused end this far on the screen (1 px with Shift)
 const READING_GAP = 18;        // the reading stands this far right of the top (or left, near the panel)
 
 // The steps between the ruler's marks, in metres: `major` between the numbered marks, at least
@@ -135,7 +135,6 @@ export class HeightRuler {
     this._distance = distance;
     this._model = null;         // what the ruler measures: measure()
     this._ends = null;          // { zero: { u, v }, top: { u, v } } while the ruler is out
-    this._drag = null;          // { end, id, dx, dy, want } while an end is carried
     this._shown = { zero: null, top: null };    // where the ends show now, page pixels
     this._said = null;
     this._build();
@@ -152,7 +151,7 @@ export class HeightRuler {
 
   stop() {
     this._ends = null;
-    this._drag = null;
+    for (const carrier of Object.values(this._carriers)) carrier.cancel();
     this._root.hidden = true;
   }
 
@@ -170,11 +169,7 @@ export class HeightRuler {
   // point under the pointer first. Every frame.
   place() {
     if (!this.on || !this._model) return;
-    const drag = this._drag;
-    if (drag?.want) {
-      this._carry(drag.end, drag.want);
-      drag.want = null;
-    }
+    for (const carrier of Object.values(this._carriers)) carrier.step();
     this._draw();
   }
 
@@ -195,54 +190,12 @@ export class HeightRuler {
     this._readingWidth = null;  // px, measured once after the reading changes
     this._root = Dom.el('div', { class: 'height-ruler', hidden: true }, this._lines, this._reading, this._zeroEl, this._topEl);
     this._container.append(this._root);
-    this._carried(this._zeroEl, 'zero');
-    this._carried(this._topEl, 'top');
-  }
-
-  // An end carried by the pointer: the point under it, kept where it was grabbed, at most once a frame
-  // (place); or by the arrow keys while it has the focus.
-  _carried(el, end) {
-    el.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 || !this.on) return;
-      e.preventDefault();
-      e.stopPropagation();
-      el.focus({ preventScroll: true });
-      el.setPointerCapture(e.pointerId);
-      const at = this._shown[end] ?? { x: e.clientX, y: e.clientY };
-      this._drag = { end, id: e.pointerId, dx: at.x - e.clientX, dy: at.y - e.clientY, want: null };
-      el.classList.add('held');
+    // each end carried by hand (carry.js)
+    const carrier = (el, end) => new CarriedPoint(el, {
+      view: this._view, shownAt: () => this._shown[end], active: () => this.on,
+      onPoint: (point) => { this._ends[end] = point; },
     });
-    el.addEventListener('pointermove', (e) => {
-      const drag = this._drag;
-      if (drag?.id === e.pointerId) drag.want = { x: e.clientX + drag.dx, y: e.clientY + drag.dy };
-    });
-    const letGo = (e) => {
-      const drag = this._drag;
-      if (drag?.id !== e.pointerId) return;
-      if (drag.want && this.on) this._carry(drag.end, drag.want);
-      this._drag = null;
-      el.classList.remove('held');
-    };
-    el.addEventListener('pointerup', letGo);
-    el.addEventListener('pointercancel', letGo);
-    el.addEventListener('lostpointercapture', letGo);
-    el.addEventListener('keydown', (e) => {
-      const step = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
-      const at = this._shown[end];
-      if (!step || !at || !this.on) return;
-      // the keys are the ruler's now, not free flight's
-      e.preventDefault();
-      e.stopPropagation();
-      const px = e.shiftKey ? 1 : KEY_PX;
-      this._carry(end, { x: at.x + step[0] * px, y: at.y + step[1] * px });
-    });
-  }
-
-  // An end to the model's top under a point of the page; it stays where it was off the top.
-  _carry(end, { x, y }) {
-    const pick = this._view.pickAt(x, y);
-    if (!pick || pick.u === null) return;
-    this._ends[end] = { u: pick.u, v: pick.v };
+    this._carriers = { zero: carrier(this._zeroEl, 'zero'), top: carrier(this._topEl, 'top') };
   }
 
   _draw() {

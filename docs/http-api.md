@@ -18,6 +18,24 @@ A file of the page: scripts, styles, pictures, the names of places on other worl
 - 200: The file.
 - 404: There is no such file.
 
+## GET `/api/asteroids/damit/{model_id}`
+
+A shape of the DAMIT catalogue, by its model's number in web/data/asteroids-damit.json, fetched once and kept on disk.
+
+- `model_id` (path, integer, required)
+- 200: The shape: vertices and facets as OBJ text, in no particular unit (the page sizes it).
+- 404: No such model.
+- 502: DAMIT did not give it, or gave something else.
+
+## GET `/api/asteroids/top/{asteroid_id}`
+
+One of the best known shapes of asteroids, by its id in web/data/asteroids-top.json, fetched once and kept on disk.
+
+- `asteroid_id` (path, string, required)
+- 200: The shape: a GLB model (NASA's) or vertices and facets as OBJ text (JAXA's, the radar models).
+- 404: No such asteroid in the list.
+- 502: Where the shape lives did not give it, or gave something else.
+
 ## GET `/api/buildings`
 
 Buildings of a region on Earth from OpenStreetMap (Overpass API): outlines and heights.

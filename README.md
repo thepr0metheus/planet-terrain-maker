@@ -42,6 +42,16 @@ the same library to every device on your network.
 - **Look around.** Around the model: drag to turn, a click shows the height there and makes that point
   the centre the view turns about. Or **free flight** (`fly-camera.js`), with the weight of a bird or
   a plane: it gathers speed, glides on, leans into turns and lifts its nose in a climb.
+- **Asteroids at their real size** on a model of one place (`asteroid-on-model.js`): the asteroid button
+  in the camera bar lists the ten most exact shapes, from Itokawa (535 m) to Ceres (946 km), taken by
+  spacecraft and radar, and finds any of about 8,800 more in the DAMIT catalogue by name or number
+  (`asteroid-search.js`). Put as many as you like: one put without a new click stands beside the last,
+  so they compare. Each stands on the ground or hangs over it at a height you set for the one chosen
+  (its name in the row under the camera bar, or a click on it); its label carries it over another point,
+  and while it moves its projection shows on the ground with its height over it. A click on one makes
+  the view turn about it. A saved model keeps its asteroids, where they stood and as high. The shapes
+  are fetched by the server the first time and kept (`app/asteroids.py`); the lists are made by
+  `tools/asteroids.py`.
 - **Check the heights** with a ruler carried across the model (`height-ruler.js`). Its foot stays at
   the level of its "0"; beside its top it reads the height above the zero on the model and in the
   data, and says why the two differ: a place raised on the model, calm water, or the model's grid.
@@ -128,6 +138,7 @@ the page loads nothing from other sites:
 | `places.py` | Nominatim search and place names, one request a second, answers kept |
 | `buildings.py` | OpenStreetMap buildings through Overpass, mirrors in turn, answers kept |
 | `pictures.py` | smaller copies of saved pictures for devices that hold less (`?most=4096`) |
+| `asteroids.py` | asteroid shapes from NASA, JAXA, the PDS radar models and DAMIT, fetched once and kept on disk (`data/cache/asteroids`) |
 | `library.py` | the saved models in `data/models`; removed ones wait 30 days in `data/trash` |
 | `keys.py` | the OpenTopography key, set on the page and kept in `data/keys` (mode 600), never sent back |
 | `settings.py` | where each world's map opens and your set of flight speeds, the same on every device |
@@ -160,8 +171,11 @@ modified Copernicus Sentinel data 2025, CC BY-NC-SA 4.0: non-commercial use only
 Map orthoimagery (USDA NAIP); AWS Terrain Tiles; Copernicus DEM GLO-30 and GLO-90 (ESA, through AWS
 Open Data and OpenTopography); NASA Moon, Mars and Venus Trek (LRO, Kaguya/JAXA, Viking, HRSC-MOLA,
 Magellan); SLDEM2015 (NASA/GSFC, JAXA); the Caltech Murray Lab CTX mosaic; USGS Gazetteer of
-Planetary Nomenclature; OpenStreetMap contributors (Nominatim, Overpass). Models made from them follow
-each provider's terms. three.js and Leaflet: MIT and BSD licences (`web/vendor/*/LICENSE`).
+Planetary Nomenclature; OpenStreetMap contributors (Nominatim, Overpass). Asteroid shapes: NASA 3D
+Resources (OSIRIS-REx, Hayabusa, NEAR Shoemaker, Dawn); JAXA Hayabusa2 (Ryugu, Watanabe et al. 2019);
+the PDS Small Bodies Node radar shape models (Hudson, Ostro et al.); DAMIT, the Database of Asteroid
+Models from Inversion Techniques (Ďurech et al. 2010, CC BY 4.0); diameters from JPL's Small-Body
+Database. Models made from them follow each provider's terms. three.js and Leaflet: MIT and BSD licences (`web/vendor/*/LICENSE`).
 
 ## License
 

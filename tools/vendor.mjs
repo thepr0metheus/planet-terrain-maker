@@ -1,5 +1,5 @@
 // Copies the libraries the page carries from node_modules into web/vendor: three.js (the 3D view,
-// GLB and USDZ export, zip) and Leaflet (the map). The page loads nothing from other sites, so these
+// GLB and USDZ export, zip, and GLB loading for the asteroids' shapes) and Leaflet (the map). The page loads nothing from other sites, so these
 // are files of our own; npm only says which version. After a version change: npm install, npm run
 // vendor, and commit web/vendor.
 //
@@ -19,12 +19,16 @@ const THREE_ADDONS = {
   'exporters/GLTFExporter.js': 'GLTFExporter.js',
   'exporters/USDZExporter.js': 'USDZExporter.js',
   'libs/fflate.module.js': 'fflate.module.js',
+  'loaders/GLTFLoader.js': 'GLTFLoader.js',
+  'utils/BufferGeometryUtils.js': 'BufferGeometryUtils.js',
+  'utils/SkeletonUtils.js': 'SkeletonUtils.js',
 };
 
 function copyAddon(from, to) {
   const source = readFileSync(join(FROM, 'three', 'examples', 'jsm', from), 'utf8')
     .replace(/from 'three';/g, "from '../three.module.js';")
-    .replace(/from '\.\.\/libs\/fflate\.module\.js';/g, "from './fflate.module.js';");
+    .replace(/from '\.\.\/libs\/fflate\.module\.js';/g, "from './fflate.module.js';")
+    .replace(/from '\.\.\/utils\/(\w+)\.js';/g, "from './$1.js';");
   // the statements only: the add-ons' doc comments show the bare import as an example
   if (/^(?:import|\})[^\n]*from '(three['/]|\.\.\/(libs|utils|math)\/)/m.test(source)) {
     throw new Error(`${from}: an import is left that the page cannot resolve`);

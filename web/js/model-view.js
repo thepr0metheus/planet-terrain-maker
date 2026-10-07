@@ -74,6 +74,10 @@ export class ModelView {
 
     this.model = new THREE.Group();
     this.scene.add(this.model);
+    // What is drawn beside the model and never picked by a click (an asteroid put on it for its size).
+    this.extras = new THREE.Group();
+    this.scene.add(this.extras);
+    this._farMm = 0;                // the size of the biggest of them, mm: the camera may go back to see it
     // Two ways to move the camera: round the model (OrbitControls), or free flight (FlyCamera).
     this.fly = new FlyCamera(this.camera, this.renderer.domElement);
     this.mode = 'orbit';
@@ -99,7 +103,7 @@ export class ModelView {
       const last = this._lastClick;
       this._lastClick = { x: e.clientX, y: e.clientY, at: now };
       if (last && now - last.at < DOUBLE_MS && Math.hypot(e.clientX - last.x, e.clientY - last.y) <= CLICK_PX) return;
-      const pick = this.pickAt(e.clientX, e.clientY);
+      const pick = this.pickAt(e.clientX, e.clientY, { extras: true });
       if (!pick) return;
       this._lastPoint = pick.point.clone();
       this.onPick(pick);
@@ -266,13 +270,15 @@ export class ModelView {
     this.lookAtModel(this._heightMm);
   }
 
-  // What of the model lies under a point of the page: three.js's hit, or null.
-  _hit(clientX, clientY) {
+  // What of the model lies under a point of the page: three.js's hit, or null. extras: what is drawn
+  // beside the model counts too (an asteroid in front of the ground is what a click hits).
+  _hit(clientX, clientY, extras = false) {
     const box = this.canvas.getBoundingClientRect();
     const pointer = new THREE.Vector2(((clientX - box.left) / box.width) * 2 - 1, -((clientY - box.top) / box.height) * 2 + 1);
     const ray = new THREE.Raycaster();
     ray.setFromCamera(pointer, this.camera);
-    return ray.intersectObjects(this.model.children, false)[0] ?? null;
+    const targets = extras ? [...this.model.children, ...this.extras.children] : this.model.children;
+    return ray.intersectObjects(targets, extras)[0] ?? null;
   }
 
   // The camera at the start: from the south-east and above, the whole model in view (in the part
@@ -293,11 +299,23 @@ export class ModelView {
     // the camera comes as close as a twelfth of the model,
     // and sees from a third of a hundredth, so that the ground that near is not cut
     this.controls.minDistance = s / 12;
-    this.controls.maxDistance = s * 8;
+    this._reach();
     this.camera.near = s / 300;
-    this.camera.far = s * 40;
-    this.camera.updateProjectionMatrix();
     this.controls.update();
+  }
+
+  // Something drawn beside the model, sizeMm long (an asteroid), may be much bigger than it: the camera
+  // may then go back far enough to see it whole, and sees that far. 0: nothing such any more.
+  allowFar(sizeMm) {
+    this._farMm = sizeMm;
+    this._reach();
+  }
+
+  _reach() {
+    const s = this._size;
+    this.controls.maxDistance = Math.max(s * 8, this._farMm * 4);
+    this.camera.far = Math.max(s * 40, this._farMm * 20);
+    this.camera.updateProjectionMatrix();
   }
 
   setLight({ azimuthDeg, elevationDeg }) {
@@ -317,13 +335,14 @@ export class ModelView {
     cam.updateProjectionMatrix();
   }
 
-  // The point of the model under the pointer: { point } in the view's own coordinates, and { u, v }
-  // where it is on the model's top (null on its sides or a building); null off the model.
-  pickAt(clientX, clientY) {
-    const hit = this._hit(clientX, clientY);
+  // The point of the model under the pointer: { point } in the view's own coordinates, { u, v } where it
+  // is on the model's top (null on its sides, a building, or with extras an asteroid), and the three.js
+  // object hit; null off the model.
+  pickAt(clientX, clientY, { extras = false } = {}) {
+    const hit = this._hit(clientX, clientY, extras);
     if (!hit) return null;
     const top = this._terrain && hit.object === this._terrain && hit.face?.materialIndex === GROUP.top && hit.uv;
-    return { point: hit.point.clone(), u: top ? hit.uv.x : null, v: top ? 1 - hit.uv.y : null };
+    return { point: hit.point.clone(), u: top ? hit.uv.x : null, v: top ? 1 - hit.uv.y : null, object: hit.object };
   }
 
   // Where a point of the model's top shows on the screen, in the view's own pixels; null when it is
@@ -336,6 +355,11 @@ export class ModelView {
   // Where a point in the model's own millimetres (z up) shows on the screen, as pointOnScreen.
   onScreen(point) {
     return this._onScreen(toView(point));
+  }
+
+  // Where a point in the view's own coordinates (a THREE.Vector3, y up) shows on the screen.
+  screenOf(point) {
+    return this._onScreen(point.clone());
   }
 
   _onScreen(p) {

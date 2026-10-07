@@ -9,6 +9,8 @@ import { Buildings, BuildingsError, buildingsSolid } from './buildings.js';
 import { TurnDials } from './turn-dials.js';
 import { HeightProbe } from './height-probe.js';
 import { HeightRuler } from './height-ruler.js';
+import { AsteroidsOnModel } from './asteroid-on-model.js';
+import { AsteroidLists, AsteroidSearch, entryOf } from './asteroid-search.js';
 import { objZipOf, stlOf, threeMfOf } from './exporters.js';
 import { exportScene, glbOf, usdzOf } from './export-scene.js';
 import { formatDistance } from './map-view.js';
@@ -83,7 +85,24 @@ export class ModelScreen {
     // the ruler of heights: out by its button, both its ends carried by hand; clicks stay as they are
     this._ruler = new HeightRuler({ container: $('model-screen'), view: this.view, distance: formatDistance });
     this._lastPick = null;          // { u, v }: the point of the top clicked last, where the ruler comes out
-    this.view.onFrame(() => { this._dials.place(); this._probe.place(); this._linePoints.place(); this._ruler.place(); });
+    // an asteroid put on a model of one place at its real size, found by its tool in the camera bar
+    // They are kept in the model's settings as they change (settings.asteroids), so that a save keeps
+    // them and the model shown again (a saved one opened, the language changed) has them again.
+    this._asteroids = new AsteroidsOnModel({
+      container: $('model-screen'), view: this.view, distance: formatDistance, say,
+      onChange: () => { this._asteroidControls(); this._keepAsteroids(); },
+      onMove: () => this._keepAsteroids(),
+    });
+    this._asteroidLists = new AsteroidLists();
+    this._asteroidsToRestore = [];  // the model's saved asteroids, put back once its solid is built
+    this._restoring = false;
+    this._asteroidSearch = new AsteroidSearch({
+      input: $('asteroid-search'), results: $('asteroid-results'), lists: this._asteroidLists, distance: formatDistance, say,
+      onPick: (asteroid) => this._putAsteroid(asteroid),
+    });
+    this.view.onFrame(() => {
+      this._dials.place(); this._probe.place(); this._linePoints.place(); this._ruler.place(); this._asteroids.place();
+    });
     // a click on the model: its height first, where it was clicked, then the view turns about it
     // While the line between two places is drawn, a click on the model may be a point of it: the
     // page takes it first (onLinePick returns true), and then it is no height and no turn.
@@ -98,6 +117,9 @@ export class ModelScreen {
         this._probe.labelAt(pick.u, pick.v);
         this._lastPick = { u: pick.u, v: pick.v };
       }
+      // a click on an asteroid chooses it: the slider raises that one
+      const asteroid = pick.object && this._asteroids.itemOf(pick.object);
+      if (asteroid) this._asteroids.choose(asteroid);
       this.view.aboutPoint(pick.point, PICK_PAUSE_MS);
     };
     this._wire(onReplace, onRedrawLine);
@@ -113,6 +135,15 @@ export class ModelScreen {
     this._probe.clear();
     this._lastPick = null;
     this._showRuler(false);
+    // the model's saved asteroids, read before the old ones go: their going must not write over them
+    const saved = model.isSplit ? [] : [...(model.settings.asteroids ?? [])];
+    this._restoring = true;
+    this._asteroids.clear();
+    this._restoring = false;
+    this._asteroidsToRestore = saved;
+    this._asteroidSearch.clear();
+    this._showAsteroidTools(false);
+    $('asteroid-toggle').hidden = model.isSplit;
     this.view.setMode('orbit');
     this.syncCameraButtons();
     this._fillPanel();
@@ -147,16 +178,98 @@ export class ModelScreen {
   // The ruler of heights out (at the point clicked last, or the one in the middle of the view) or away.
   _showRuler(on) {
     if (on && this._mesh) {
-      const free = this.view.freeRect();
-      const middle = this.view.pickAt((free.left + free.right) / 2, (free.top + free.bottom) / 2);
-      const start = this._lastPick ?? (middle?.u != null ? { u: middle.u, v: middle.v } : { u: 0.5, v: 0.5 });
-      this._ruler.start(start, this._measured());
+      this._ruler.start(this._startPoint(), this._measured());
     } else {
       this._ruler.stop();
     }
     const button = $('ruler-toggle');
     button.setAttribute('aria-pressed', String(this._ruler.on));
     $('ruler-hint').hidden = !this._ruler.on;
+  }
+
+  // Where a tool puts its thing first: the point of the top clicked last, else the one in the middle of
+  // the view, else the middle of the frame.
+  _startPoint() {
+    const free = this.view.freeRect();
+    const middle = this.view.pickAt((free.left + free.right) / 2, (free.top + free.bottom) / 2);
+    return this._lastPick ?? (middle?.u != null ? { u: middle.u, v: middle.v } : { u: 0.5, v: 0.5 });
+  }
+
+  // The asteroid's tools under the camera bar: its search, and a way to take it off the model. The
+  // list of asteroids opens by itself only while none is on the model: it would cover their chips.
+  _showAsteroidTools(on) {
+    $('asteroid-tools').hidden = !on;
+    $('asteroid-toggle').setAttribute('aria-pressed', String(on));
+    this._asteroidControls();
+    if (on && !this._asteroids.items.length) this._asteroidSearch.open();
+    else this._asteroidSearch.close();
+  }
+
+  async _putAsteroid(asteroid) {
+    if (!this._mesh || this._model?.isSplit) return;
+    this._busy(t('Loading the shape…'));
+    try {
+      await this._asteroids.add(asteroid, this._startPoint());
+    } finally {
+      this._busy(null);
+    }
+  }
+
+  // The asteroids on the model as a row of their names: a name chooses that one, its cross takes it
+  // off; the height over the ground of the one chosen; and a way to take them all off.
+  _asteroidControls() {
+    const items = this._asteroids.items, chosen = this._asteroids.chosen;
+    $('asteroid-list').replaceChildren(...items.map((item) => {
+      const name = item.name;
+      const pick = Dom.el('button', { type: 'button', class: 'pick', 'aria-pressed': String(item === chosen),
+        title: t('{name}: the slider raises and lowers it', { name }) }, name);
+      pick.addEventListener('click', () => this._asteroids.choose(item));
+      const drop = Dom.el('button', { type: 'button', class: 'drop', title: t('Take {name} off the model', { name }),
+        'aria-label': t('Take {name} off the model', { name }) }, Icon.make('x', 14));
+      drop.addEventListener('click', () => this._asteroids.remove(item));
+      return Dom.el('span', { class: 'asteroid-chip' }, pick, drop);
+    }));
+    $('asteroid-list').hidden = !items.length;
+    $('asteroid-remove').hidden = items.length < 2;
+    $('asteroid-height-row').hidden = !chosen;
+    if (!chosen) return;
+    // the slider goes as the square root of the height: the low heights, which matter most, get most of it
+    const highest = this._asteroids.highestM;
+    $('asteroid-height').value = String(highest > 0 ? Math.sqrt(chosen.altitudeM / highest) : 0);
+    $('asteroid-height-val').textContent = chosen.altitudeM > 0 ? formatDistance(chosen.altitudeM) : t('on the ground');
+  }
+
+  // The asteroids on the model, kept in its settings (not while the saved ones are put back: one that
+  // did not come back would be lost from them).
+  _keepAsteroids() {
+    if (this._model && !this._model.isSplit && !this._restoring) this._model.settings.asteroids = this._asteroids.saved();
+  }
+
+  // A model's saved asteroids put back where they were, as high as they were.
+  async _restoreAsteroids(saved) {
+    const model = this._model;
+    this._restoring = true;
+    try {
+      const lists = await this._asteroidLists.lists();
+      let back = 0;
+      for (const one of saved) {
+        const asteroid = entryOf(one.asteroid, lists);
+        if (!asteroid || this._model !== model) continue;
+        if (await this._asteroids.add(asteroid, one.at, { exact: true, altitudeM: one.altitudeM ?? 0 })) back += 1;
+      }
+      if (this._model === model && back === saved.length) model.settings.asteroids = this._asteroids.saved();
+    } catch (e) {
+      this._say(t('The list of asteroids did not come: {why}', { why: e.message }), 'error');
+    } finally {
+      if (this._model === model) this._restoring = false;    // a newer model's restore keeps its own
+    }
+  }
+
+  // The slider moved: the chosen asteroid's new height over the ground.
+  _asteroidHeight() {
+    const metres = this._asteroids.highestM * Number($('asteroid-height').value) ** 2;
+    this._asteroids.setAltitude(metres);
+    $('asteroid-height-val').textContent = metres > 0 ? formatDistance(metres) : t('on the ground');
   }
 
   // What the ruler measures: the solid's own top (terrain-mesh.js topMm), and at each point the data's
@@ -177,6 +290,8 @@ export class ModelScreen {
       },
       zMmPerM: mesh.zMmPerM,
       mmPerM: mesh.mmPerM,
+      widthMm: Math.max(mesh.size.x, mesh.size.y),
+      frame: { widthM: m.frame.widthM, heightM: m.frame.heightM },
       names: m.places.map((p) => p.name),
       stepM: m.frame.widthM / (mesh.top.nx - 1),
     };
@@ -263,6 +378,12 @@ export class ModelScreen {
     }
     $('orbit-centre').addEventListener('click', () => this.view.centre());
     $('ruler-toggle').addEventListener('click', () => this._showRuler(!this._ruler.on));
+    $('asteroid-toggle').addEventListener('click', () => this._showAsteroidTools($('asteroid-tools').hidden));
+    $('asteroid-remove').addEventListener('click', () => {
+      this._asteroids.clear();
+      this._asteroidSearch.clear();
+    });
+    $('asteroid-height').addEventListener('input', () => this._asteroidHeight());
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || !this._ruler.on || $('model-screen').hidden) return;
       if (e.target?.closest?.('input, select, textarea, [contenteditable], dialog')) return;
@@ -486,6 +607,8 @@ export class ModelScreen {
         this.view.show({ mesh: this._mesh, picture: this._picture, buildings: this._buildingsSolid,
           surface: (u, v) => this._surfaceAt(u, v), keepCamera: !fresh });
         if (this._ruler.on) this._ruler.measure(this._measured());
+        this._asteroids.measure(this._measured());
+        if (this._asteroidsToRestore.length) this._restoreAsteroids(this._asteroidsToRestore.splice(0));
         $('size-note').textContent = t('{n} triangles', { n: number(this._mesh.triangles) });
       } else {
         this.view.setPicture(this._picture);

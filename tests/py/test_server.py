@@ -9,7 +9,7 @@ from pathlib import Path
 from fakes import Clock, FakeFetcher
 
 from app.apispec import build, markdown
-from app.fetch import Answer
+from app.fetch import Answer, FetchError
 from app.library import TRASH_DAYS, Library, NotFound, Refused
 from app.server import CSP, create_app
 
@@ -278,3 +278,43 @@ class ApiDescriptionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AsteroidShapesTest(unittest.TestCase):
+    """The shapes of asteroids: only the two lists can be asked for; each file is fetched once."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.fetcher = FakeFetcher({
+            "Bennu_1_1.glb": Answer(b"glTF\x02\x00\x00\x00 a model", "model/gltf-binary"),
+            "4769castalia.tab": Answer(b"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", "text/plain"),
+            "AsteroidModel/101/shape.obj": Answer(b"v 1 2 3\nv 2 3 4\nv 3 4 5\nf 1 2 3\n", "text/plain"),
+            "AsteroidModel/102/shape.obj": Answer(b"<html>not a shape</html>", "text/html"),
+            "AsteroidModel/103/shape.obj": FetchError("HTTP 500", 500),
+        })
+        self.client = create_app(Path(self.dir.name), fetcher=self.fetcher).test_client()
+
+    def test_a_shape_of_the_top_list_is_fetched_once_and_kept(self):
+        for _ in range(2):
+            answer = self.client.get("/api/asteroids/top/bennu")
+            self.assertEqual((answer.status_code, answer.mimetype), (200, "model/gltf-binary"))
+            self.assertTrue(answer.data.startswith(b"glTF"))
+        self.assertEqual(sum("Bennu" in url for url in self.fetcher.asked), 1, "the second time from the disk")
+        self.assertIn("immutable", answer.headers["Cache-Control"])
+        castalia = self.client.get("/api/asteroids/top/castalia")
+        self.assertEqual((castalia.status_code, castalia.mimetype), (200, "text/plain"))
+
+    def test_a_shape_of_damit_by_its_number(self):
+        answer = self.client.get("/api/asteroids/damit/101")
+        self.assertEqual(answer.status_code, 200)
+        self.assertIn(b"v 1 2 3", answer.data)
+        self.assertTrue((Path(self.dir.name) / "cache" / "asteroids" / "damit-101.obj").is_file())
+
+    def test_nothing_else_is_fetched_and_a_bad_file_is_not_kept(self):
+        self.assertEqual(self.client.get("/api/asteroids/top/moon").status_code, 404)
+        self.assertEqual(self.client.get("/api/asteroids/top/..%2Fsecret").status_code, 404)
+        self.assertEqual(self.client.get("/api/asteroids/damit/0").status_code, 404)
+        self.assertEqual(self.client.get("/api/asteroids/damit/102").status_code, 502, "a page, not a shape")
+        self.assertFalse((Path(self.dir.name) / "cache" / "asteroids" / "damit-102.obj").exists())
+        self.assertEqual(self.client.get("/api/asteroids/damit/103").status_code, 502)
