@@ -1,0 +1,10 @@
+.git
+data
+tests
+tools
+docs
+public
+node_modules
+package.json
+package-lock.json
+**/__pycache__

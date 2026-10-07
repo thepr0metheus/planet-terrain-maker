@@ -1,0 +1,326 @@
+/*
+ * What the pages have in common: the colours, the light behind the page, the frame of a
+ * page (name, tools, footer), buttons, status chips, a fold, messages, forms. A page adds its own
+ * style.css on top and never repeats what is here.
+ *
+ * One set of tokens, each given for the light and the dark scheme at once with light-dark(): the
+ * scheme is the device's own, unless theme.js has put data-theme on the root. The pages have no
+ * style attributes — their Content-Security-Policy would refuse them; what a script has to vary it
+ * sets as custom properties from code, which the policy allows.
+ */
+
+:root {
+  color-scheme: light dark;
+  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 22px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+
+  --bg: light-dark(#f2f3fa, #080a11);
+  --ink: light-dark(#0e1424, #eef0f8);
+  --ink-2: light-dark(#4a5468, #aab2c5);
+  --ink-3: light-dark(#667088, #8189a0);
+  --glass: light-dark(rgba(255, 255, 255, .66), rgba(255, 255, 255, .055));
+  --glass-up: light-dark(rgba(255, 255, 255, .94), rgba(255, 255, 255, .10));
+  --stroke: light-dark(rgba(20, 28, 60, .09), rgba(255, 255, 255, .10));
+  --stroke-up: light-dark(rgba(20, 28, 60, .20), rgba(255, 255, 255, .22));
+  --accent: light-dark(#4f46e5, #8e90ff);
+  --accent-soft: light-dark(rgba(79, 70, 229, .10), rgba(142, 144, 255, .16));
+  --accent-ink: light-dark(#ffffff, #0b0c1c);
+  --cyan: light-dark(#0891b2, #38e0d0);
+  --danger: light-dark(#cf1f3a, #ff8091);
+  --danger-soft: light-dark(rgba(207, 31, 58, .09), rgba(255, 128, 145, .14));
+  --shade: light-dark(rgba(34, 44, 99, .28), rgba(0, 0, 0, .62));
+  --spot: light-dark(rgba(79, 70, 229, .13), rgba(142, 144, 255, .20));
+  --blob-a: light-dark(rgba(99, 102, 241, .24), rgba(99, 102, 241, .36));
+  --blob-b: light-dark(rgba(34, 211, 238, .20), rgba(34, 211, 238, .15));
+  --blob-c: light-dark(rgba(244, 114, 182, .18), rgba(244, 114, 182, .13));
+  --chip: light-dark(#ffffff, rgba(255, 255, 255, .95));
+  --field: light-dark(rgba(255, 255, 255, .75), rgba(255, 255, 255, .05));
+  --ok: light-dark(#15803d, #4ade80);
+  --ok-soft: light-dark(rgba(21, 128, 61, .10), rgba(74, 222, 128, .14));
+  --warn: light-dark(#b45309, #fbbf24);
+  --warn-soft: light-dark(rgba(180, 83, 9, .10), rgba(251, 191, 36, .14));
+  --blur: blur(16px) saturate(1.5);
+  --shimmer: linear-gradient(100deg, var(--glass) 30%, var(--glass-up) 50%, var(--glass) 70%) 0 0 / 200% 100%;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+/* A browser that does not know light-dark() (before 2024) would drop every colour above at once and
+   show a page that cannot be read; it gets the dark scheme as plain values instead. */
+@supports not (color: light-dark(#000, #fff)) {
+  :root {
+    --bg: #080a11; --ink: #eef0f8; --ink-2: #aab2c5; --ink-3: #8189a0; --glass: rgba(255, 255, 255, .055);
+    --glass-up: rgba(255, 255, 255, .10); --stroke: rgba(255, 255, 255, .10); --stroke-up: rgba(255, 255, 255, .22);
+    --accent: #8e90ff; --accent-soft: rgba(142, 144, 255, .16); --accent-ink: #0b0c1c; --cyan: #38e0d0;
+    --danger: #ff8091; --danger-soft: rgba(255, 128, 145, .14); --shade: rgba(0, 0, 0, .62);
+    --spot: rgba(142, 144, 255, .20); --blob-a: rgba(99, 102, 241, .36); --blob-b: rgba(34, 211, 238, .15);
+    --blob-c: rgba(244, 114, 182, .13); --chip: rgba(255, 255, 255, .95); --field: rgba(255, 255, 255, .05);
+    --ok: #4ade80; --ok-soft: rgba(74, 222, 128, .14); --warn: #fbbf24; --warn-soft: rgba(251, 191, 36, .14);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+/* A class that sets display (.tools is flex) would otherwise win over the hidden attribute. */
+[hidden] { display: none !important; }
+::selection { background: var(--accent-soft); }
+
+html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh; color: var(--ink); font: 15px/1.55 var(--font);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); }
+code { font-family: var(--mono); font-size: .86em; }
+:not(pre) > code { padding: .08em .42em; border-radius: 6px; background: var(--accent-soft); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ---------- the light behind everything ---------- */
+.aurora {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(62rem 40rem at 10% -10%, var(--blob-a), transparent 64%),
+    radial-gradient(50rem 36rem at 96% 4%, var(--blob-b), transparent 62%),
+    radial-gradient(58rem 42rem at 60% 112%, var(--blob-c), transparent 64%);
+}
+.aurora::after {
+  content: ""; position: absolute; inset: 0; opacity: .06;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- the frame of a page: name and tools on top, footer below ---------- */
+.wrap { max-width: 1200px; margin: 0 auto; padding: clamp(18px, 3vw, 36px) clamp(16px, 4vw, 40px) 72px; }
+/* Two columns: the name and the tools. A page may add a row of its own under them: the search (.finder).
+   The name's column has a minimum of its own, so that a toolbar with many buttons wraps into a second row
+   instead of squeezing the name out. */
+.top {
+  display: grid; grid-template-columns: minmax(min(100%, 17rem), 1fr) auto; align-items: center; gap: 20px 24px; padding-bottom: 30px;
+}
+.brand { grid-area: 1 / 1; display: flex; align-items: center; gap: 16px; min-width: 0; }
+.logo { flex: none; width: 52px; height: 52px; filter: drop-shadow(0 10px 22px var(--shade)); }
+h1 {
+  margin: 0; font-size: clamp(25px, 3.2vw, 34px); line-height: 1.08; letter-spacing: -.035em; font-weight: 760;
+  background: linear-gradient(110deg, var(--ink) 38%, var(--accent)); -webkit-background-clip: text;
+  background-clip: text; color: transparent;
+}
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  h1 { background: none; color: var(--ink); }
+}
+.sub { margin: 5px 0 0; color: var(--ink-2); font-size: 13.5px; }
+.tools { grid-area: 1 / 2; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--stroke); color: var(--ink-3); font-size: 12.5px; }
+footer a { color: var(--accent); }
+
+/* ---------- the search: a row of its own under the name and the tools, across the whole width ---------- */
+.finder { grid-area: 2 / 1 / 3 / -1; }
+.search {
+  display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px; border-radius: 16px;
+  background: var(--glass); border: 1px solid var(--stroke); color: var(--ink-3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5);
+  transition: border-color .2s, box-shadow .2s, background .2s, color .2s;
+}
+.search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); background: var(--glass-up); color: var(--accent); }
+.search-icon { display: grid; place-items: center; }
+.search input {
+  flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ink);
+  font: inherit; font-size: 15px;
+}
+.search input::placeholder { color: var(--ink-3); }
+.search input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.search kbd {
+  padding: 4px 8px; border: 1px solid var(--stroke-up); border-radius: 8px; color: var(--ink-3);
+  font: 600 12px/1 var(--mono);
+}
+.search:focus-within kbd, .search:has(input:not(:placeholder-shown)) kbd { display: none; }
+@media (hover: none) { .search kbd { display: none; } }
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 16px;
+  border: 1px solid var(--stroke); border-radius: 14px; background: var(--glass); color: var(--ink);
+  font: 600 14px/1 var(--font); cursor: pointer; text-decoration: none; /* a link is a button too */
+  -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
+  transition: transform .18s var(--ease), background .2s, border-color .2s, box-shadow .2s, color .2s;
+}
+@media (hover: hover) { .btn:hover:not(:disabled) { background: var(--glass-up); border-color: var(--stroke-up); transform: translateY(-1px); } }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.97); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.icon { width: 42px; padding: 0; }
+.btn.small { height: 34px; padding: 0 12px; border-radius: 11px; font-size: 13px; }
+.btn.danger { color: var(--danger); }
+.btn.danger:hover:not(:disabled) { background: var(--danger-soft); border-color: var(--danger); }
+.btn.primary {
+  border-color: transparent; color: var(--accent-ink);
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  box-shadow: 0 10px 26px -12px var(--accent);
+}
+.btn.primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--accent), var(--cyan)); box-shadow: 0 14px 30px -12px var(--accent); }
+.btn.accent { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.pill {
+  display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--stroke); background: var(--glass); color: var(--ink-2); font-size: 13px;
+}
+.mini {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 11px;
+  border: 1px solid var(--stroke); background: var(--glass-up); color: var(--ink-2); cursor: pointer;
+  transition: color .2s, border-color .2s, background .2s, transform .15s var(--ease);
+}
+.mini:hover { color: var(--accent); border-color: var(--accent); }
+.mini:active { transform: scale(.92); }
+.mini.danger:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
+
+/* ---------- small things: a section's label, a count, a way to show the state of something ---------- */
+.kicker { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; color: var(--ink-3); }
+.count {
+  margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font-size: 11.5px; letter-spacing: 0;
+}
+.count:empty { display: none; }
+/* The line above a list of things: its name, and a few words about it. */
+.deck-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 18px; margin: 0 2px 16px; }
+.lead { margin: 0; color: var(--ink-3); font-size: 13px; }
+/* Status says the same four things on every page, in the same four colours: fine, to look at, wrong, and not sure. */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border: 1px solid var(--stroke);
+  border-radius: 999px; background: var(--glass); color: var(--ink-2); font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.chip.ok { border-color: transparent; background: var(--ok-soft); color: var(--ok); }
+.chip.warn { border-color: transparent; background: var(--warn-soft); color: var(--warn); }
+.chip.fail { border-color: transparent; background: var(--danger-soft); color: var(--danger); }
+.chip.accent { border-color: transparent; background: var(--accent-soft); color: var(--accent); }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-3); }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.dot.warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.dot.fail { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+/* A glass surface: what a panel, a card or a table frame is made of. */
+.glass {
+  border: 1px solid var(--stroke); background: var(--glass); box-shadow: 0 18px 36px -26px var(--shade);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+}
+/* The light that follows the mouse over a surface: Glow (ui.js) says where it is, through --mx and --my.
+   A finger leaves no mouse behind, and a "hover" that stays after a tap is a bug: only where there is a mouse. */
+.glow { position: relative; }
+.glow::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), var(--spot), transparent 70%);
+}
+@media (hover: hover) { .glow:hover::after { opacity: 1; } }
+
+/* A fold: a details element whose chevron turns. `.fold.bare` has no line above it. */
+.fold { border-top: 1px solid var(--stroke); font-size: 14px; }
+.fold.bare { border-top: 0; }
+.fold > summary {
+  display: flex; align-items: center; gap: 12px; padding: 14px 2px; list-style: none; cursor: pointer;
+  color: var(--ink); font-weight: 600; transition: color .2s;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::before {
+  content: ""; flex: none; width: 7px; height: 7px; margin: 0 3px 2px 1px; border-right: 2px solid var(--ink-3);
+  border-bottom: 2px solid var(--ink-3); transform: rotate(-45deg); transition: transform .25s var(--ease), border-color .2s;
+}
+.fold > summary:hover { color: var(--accent); }
+.fold > summary:hover::before { border-color: var(--accent); }
+.fold[open] > summary::before { transform: rotate(45deg); }
+.fold[open] { padding-bottom: 14px; }
+
+/* ---------- in and out: a thing coming in, a block that stands for a state ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+.enter { animation: rise .55s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.skeleton { border-color: transparent; box-shadow: none; background: var(--shimmer); animation: shimmer 1.5s linear infinite; }
+
+/* a block in the place of the cards: loading text, a failure, an empty list, a search with no match */
+.state {
+  grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 0;
+  padding: 44px 22px; text-align: center; color: var(--ink-2); border: 1px dashed var(--stroke-up); border-radius: var(--radius);
+}
+.state strong { color: var(--ink); font-size: 16px; }
+.state.error { border-color: var(--danger); background: var(--danger-soft); }
+.state.error strong { color: var(--danger); }
+
+/* ---------- messages ---------- */
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 16px) scale(.96); } }
+.toast {
+  position: fixed; left: 50%; bottom: max(22px, env(safe-area-inset-bottom)); z-index: 100; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; max-width: min(580px, calc(100vw - 28px)); padding: 11px 12px 11px 20px;
+  border-radius: 18px; color: #f4f5fc; font-size: 14px; background: rgba(22, 25, 40, .94);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .10), 0 26px 60px -16px rgba(0, 0, 0, .6);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+}
+.toast.shown { animation: toast-in .4s var(--ease); }
+.toast.error { background: rgba(92, 18, 32, .96); }
+.toast-text { overflow-wrap: anywhere; }
+.toast-action {
+  flex: none; height: 32px; padding: 0 14px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .16);
+  color: #fff; font: 600 13px/1 var(--font); cursor: pointer; transition: background .2s;
+}
+.toast-action:hover { background: rgba(255, 255, 255, .26); }
+.toast-close {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 10px;
+  background: transparent; color: rgba(255, 255, 255, .7); cursor: pointer;
+}
+.toast-close:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+
+/* ---------- the forms ---------- */
+@keyframes pop { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+dialog {
+  width: min(480px, calc(100vw - 28px)); padding: 26px; color: var(--ink); border: 1px solid var(--stroke-up);
+  border-radius: 26px; background: light-dark(rgba(255, 255, 255, .93), rgba(20, 23, 36, .88));
+  box-shadow: 0 50px 100px -34px rgba(0, 0, 0, .6);
+  -webkit-backdrop-filter: blur(26px) saturate(1.6); backdrop-filter: blur(26px) saturate(1.6);
+}
+dialog[open] { animation: pop .3s var(--ease); }
+dialog::backdrop { background: rgba(6, 8, 18, .5); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+dialog form { display: flex; flex-direction: column; gap: 14px; }
+dialog h2 { margin: 0 0 2px; font-size: 19px; letter-spacing: -.02em; text-transform: none; color: var(--ink); font-weight: 700; }
+dialog label { display: flex; flex-direction: column; gap: 6px; color: var(--ink-2); font-size: 12.5px; font-weight: 600; }
+dialog input, dialog textarea {
+  width: 100%; padding: 11px 13px; border: 1px solid var(--stroke-up); border-radius: 13px; background: var(--field);
+  color: var(--ink); font: inherit; font-size: 15px; font-weight: 400; transition: border-color .2s, box-shadow .2s;
+}
+dialog input:focus, dialog textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+dialog textarea { font-family: var(--mono); font-size: 13px; }
+/* a box for sentences, not for rows of code */
+dialog textarea.prose { font-family: var(--font); font-size: 15px; }
+/* what cannot be changed here: the machine and the name of a card that exists */
+dialog input[readonly] { color: var(--ink-3); background: transparent; }
+dialog input[readonly]:focus { border-color: var(--stroke-up); box-shadow: none; }
+/* a line under a field that says what is expected in it */
+dialog .hint { color: var(--ink-3); font-size: 12px; font-weight: 400; }
+.icon-row { display: flex; align-items: center; gap: 8px; }
+.icon-row input { flex: 1; min-width: 0; }
+.ico { width: 24px; height: 24px; flex: none; object-fit: contain; border-radius: 6px; }
+.form-note { margin: 0; color: var(--ink-3); font-size: 13px; overflow-wrap: anywhere; }
+.form-error { margin: 0; color: var(--danger); font-size: 13px; overflow-wrap: anywhere; }
+.actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+dialog select {
+  width: 100%; padding: 11px 13px; border: 1px solid var(--stroke-up); border-radius: 13px; background: var(--field);
+  color: var(--ink); font: inherit; font-size: 15px; font-weight: 400;
+}
+dialog select:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+dialog .check { flex-direction: row; align-items: center; gap: 10px; color: var(--ink); font-weight: 500; }
+dialog .check input { width: auto; accent-color: var(--accent); }
+/* a long form: wider, and it scrolls inside its own frame instead of off the screen */
+dialog.tall { width: min(620px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow: auto; }
+
+/* ---------- smaller screens ---------- */
+/* the secondary buttons keep their icons and lose their words, so that the name has room on one line */
+@media (max-width: 900px) {
+  .tools .btn:not(.primary):not(.accent) .label { display: none; }
+  .tools .btn:not(.primary):not(.accent) { width: 42px; padding: 0; }
+}
+@media (max-width: 640px) {
+  .top { grid-template-columns: 1fr; }
+  /* one column: the tools go under the name, and under the search when the page has one */
+  .tools { grid-area: 2 / 1; justify-content: flex-start; }
+  .finder ~ .tools { grid-area: 3 / 1; }
+  .logo { width: 44px; height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}

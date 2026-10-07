@@ -1,0 +1,24 @@
+# Planet Terrain Maker in Docker:
+#   docker compose up -d --build
+# then open http://localhost:8080. The saved models, the map tiles and the settings stay in the
+# volume ptm-data.
+services:
+  planet-terrain-maker:
+    build: .
+    image: planet-terrain-maker:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ptm-data:/app/data
+    environment:
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8080
+      - TILE_CACHE_MB=2048
+      # Nominatim and Overpass ask to be told who sends the requests: add a way to reach you.
+      # - APP_USER_AGENT=planet-terrain-maker/1.0 (+https://example.org/contact)
+      # Copernicus heights through OpenTopography need a free key; it can also be set on the page.
+      # - OPENTOPO_KEY=your-key
+    restart: unless-stopped
+
+volumes:
+  ptm-data:

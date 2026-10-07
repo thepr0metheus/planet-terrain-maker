@@ -1,0 +1,390 @@
+/*
+ * Planet Terrain Maker's own look, on top of the shared ui.css (never repeated or changed here).
+ * The page is a tool, not a list: the header is one compact row, and the map and the model take the
+ * rest of the window. What scripts vary they set as custom properties: the page's
+ * Content-Security-Policy refuses style attributes.
+ */
+
+html, body { height: 100%; }
+body { overflow: hidden; }
+
+/* Lists that open over other controls (the search's places, the export menu) are solid: the glass of
+   ui.css lets the controls under them show through, and both are then unreadable. */
+:root { --popup: light-dark(#ffffff, #181a24); }
+@supports not (color: light-dark(#000, #fff)) { :root { --popup: #181a24; } }
+
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+/* ---------- the header: one row ---------- */
+.app-top {
+  display: flex; align-items: center; gap: 12px; padding: 10px clamp(12px, 2vw, 22px);
+  border-bottom: 1px solid var(--stroke); background: var(--glass);
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); position: relative; z-index: 30;
+}
+.home-link {
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.home-link .logo { width: 38px; height: 38px; }
+.brand-words { display: flex; flex-direction: column; min-width: 0; }
+.app-name {
+  font-size: 19px; font-weight: 760; letter-spacing: -.02em; line-height: 1.1; white-space: nowrap;
+  background: linear-gradient(110deg, var(--ink) 38%, var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.app-top .sub { margin: 2px 0 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-top .tools { margin-left: auto; }
+/* the buttons do not fit one row beside the name (header-fit.js): the secondary ones show their icons */
+.app-top .tools.compact .btn:not(.primary):not(.accent) .label { display: none; }
+.app-top .tools.compact .btn:not(.primary):not(.accent) { width: 42px; padding: 0; }
+.icon-slot { display: inline-grid; place-items: center; }
+.lang-btn { min-width: 44px; font-family: var(--mono); }
+
+.screens { position: relative; flex: 1; min-height: 0; }
+.screen { position: absolute; inset: 0; }
+
+/* ---------- the library ---------- */
+.library-screen { overflow: auto; }
+.library-screen .wrap { padding-top: 26px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+.card {
+  position: relative; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius);
+  cursor: pointer; transition: transform .2s var(--ease), border-color .2s;
+}
+@media (hover: hover) { .card:hover { transform: translateY(-2px); border-color: var(--stroke-up); } }
+.card:focus-visible { outline: 2px solid var(--accent); }
+.card-picture { aspect-ratio: 4 / 3; background: var(--accent-soft); display: grid; place-items: center; overflow: hidden; }
+.card-picture img { width: 100%; height: 100%; object-fit: cover; }
+.card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 4px; }
+.card-name { font-weight: 700; overflow-wrap: anywhere; }
+.card-meta { color: var(--ink-3); font-size: 12.5px; }
+.card-actions { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; opacity: 0; transition: opacity .2s; }
+.card:focus-within .card-actions, .card:hover .card-actions { opacity: 1; }
+@media (hover: none) { .card-actions { opacity: 1; } }
+.start-tips { margin-top: 26px; padding: 18px 22px; border-radius: var(--radius); color: var(--ink-2); }
+.start-tips h3 { margin: 0 0 8px; color: var(--ink); font-size: 16px; }
+.start-tips ol { margin: 0 0 8px; padding-left: 20px; }
+.credits { margin-top: 30px; }
+
+/* ---------- the map ---------- */
+.map { position: absolute; inset: 0; background: #1a1d26; }
+.leaflet-container { font: 12px/1.4 var(--font); background: #1a1d26; }
+.leaflet-control-attribution { background: rgba(10, 12, 20, .55) !important; color: #d8dbe6 !important; }
+.leaflet-control-attribution a { color: #b9bcff !important; }
+/* above Leaflet's own controls (z-index 1000) */
+.map-panel {
+  position: absolute; top: 12px; left: 12px; z-index: 1100; width: min(340px, calc(100% - 24px));
+  max-height: calc(100% - 24px); overflow: auto; padding: 14px; border-radius: 20px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+/* Over the map the thin glass of ui.css lets snow or a bright desert wash the hints out: the panels
+   on the map are tinted more. */
+.map-panel.glass, .guide-bar.glass { background: var(--map-glass); }
+:root { --map-glass: light-dark(rgba(255, 255, 255, .84), rgba(14, 16, 24, .78)); }
+@supports not (color: light-dark(#000, #fff)) { :root { --map-glass: rgba(14, 16, 24, .78); } }
+.seg { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--stroke); border-radius: 13px; background: var(--field); }
+.seg button {
+  flex: 1; min-width: 0; height: 32px; padding: 0 8px; border: 0; border-radius: 10px; background: transparent;
+  color: var(--ink-2); font: 600 13px/1 var(--font); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.seg button:disabled { opacity: .45; cursor: default; }
+/* A finger needs more room than a mouse: on a touch screen the buttons and their segments grow. */
+@media (pointer: coarse) {
+  .btn { min-height: 40px; }
+  .seg button { min-height: 38px; }
+  .turn-dial .turn-step { min-width: 38px; min-height: 38px; }
+}
+/* three shapes in a narrow panel: a name may take two lines rather than be cut */
+.seg.shapes button { height: auto; min-height: 32px; padding: 5px 6px; white-space: normal; line-height: 1.15; }
+.place-search { position: relative; }
+.atlas-rows a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.atlas-rows a:hover, .atlas-rows a:focus-visible { text-decoration: underline; }
+.atlas-rows { display: grid; gap: 6px; margin: 0 0 10px; padding: 0; list-style: none; }
+.atlas-rows b { color: var(--ink); font-weight: 650; }
+.start-row .btn { padding: 0 10px; }
+.kinds button[aria-pressed="true"] { background: linear-gradient(135deg, var(--accent), var(--cyan)); color: var(--accent-ink); }
+.place-search .search { height: 42px; }
+.search-results {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 10; max-height: 300px; overflow: auto;
+  border-radius: 14px; padding: 4px; background: var(--popup); box-shadow: 0 22px 44px -18px var(--shade);
+}
+.search-results button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 10px; border: 0;
+  border-radius: 10px; background: transparent; color: var(--ink); font: 14px/1.3 var(--font); text-align: left; cursor: pointer;
+}
+.search-results button:hover, .search-results button:focus-visible { background: var(--accent-soft); }
+.search-results .detail { color: var(--ink-3); font-size: 12px; }
+.search-results .state { padding: 12px; }
+.search-results .group { margin: 0; padding: 8px 10px 3px; color: var(--ink-3); font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.shape-help, .guide-line, .sources { display: flex; flex-direction: column; gap: 8px; }
+.size-field { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
+.size-field input, .guide-line input, .guide-mask input {
+  width: 92px; padding: 7px 10px; border: 1px solid var(--stroke-up); border-radius: 10px; background: var(--field);
+  color: var(--ink); font: inherit; font-size: 14px;
+}
+.guide-line { font-size: 13.5px; color: var(--ink-2); }
+/* the line between two places, drawn on the model: its tools in the guide's bar, its points as marks */
+.guide-bar .guide-line .row, .guide-bar .row.guide-mask { justify-content: flex-start; flex-wrap: wrap; gap: 6px; font-size: 13.5px; color: var(--ink-2); }
+.guide-line .line-draw { display: inline-flex; flex-direction: row; gap: 6px; }
+.line-point {
+  position: absolute; left: 0; top: 0; z-index: 15; width: 26px; height: 26px; margin: -13px 0 0 -13px; padding: 0;
+  transform: translate(var(--x, 0px), var(--y, 0px)); border: 2px solid #fff; border-radius: 50%;
+  background: var(--accent); color: #fff; font: 700 12.5px/1 var(--font); cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+}
+.line-point:hover, .line-point:focus-visible { background: var(--danger, #e5484d); }
+.line-turn { gap: 6px; }
+.line-deg { display: flex; align-items: center; gap: 4px; }
+.guide-line input, .guide-mask input { width: 64px; }
+.sources label, .picture-px, .landers, .panel .select { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.sources select, .picture-px select, .panel select {
+  padding: 8px 10px; border: 1px solid var(--stroke-up); border-radius: 11px; background: var(--field); color: var(--ink); font: inherit; font-size: 14px;
+}
+.hint { margin: 0; color: var(--ink-3); font-size: 12.5px; }
+.landers { margin: 2px 0 4px; }
+.landers .search-results { z-index: 11; }
+.search-results button.active { background: var(--accent-soft); }
+/* a craft's name over its mark on the map */
+.leaflet-tooltip.lander-name { padding: 3px 8px; border: 0; border-radius: 8px; background: rgba(14, 16, 24, .85); color: #fff; font: 650 12.5px var(--font); box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
+.leaflet-tooltip.lander-name::before { display: none; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.capture-row .btn { flex: 1; }
+
+/* The circle a place is framed with: as wide and as high as the script says, over the map's middle.
+   On the Moon, Mars and Venus the map stretches east-west away from the equator: there it is an oval. */
+.frame-circle {
+  position: absolute; left: var(--frame-x, 50%); top: var(--frame-y, 50%); z-index: 450; pointer-events: none;
+  width: var(--frame-w, 300px); height: var(--frame-h, 300px); transform: translate(-50%, -50%);
+  border: 2px dashed rgba(255, 255, 255, .95); border-radius: 50%; overflow: hidden;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .35), 0 0 0 100vmax rgba(8, 10, 17, .28);
+}
+.frame-circle.wide { border-color: #fbbf24; }
+.frame-size {
+  position: absolute; left: 50%; bottom: 8%; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px;
+  background: rgba(10, 12, 20, .65); color: #fff; font: 600 12px/1.4 var(--mono); white-space: nowrap;
+}
+/* A model of two places on the map: the first place's outline, the line, the other place's part
+   dimmed, the parts' names; the line's points over all (the map's own markers under them, clear,
+   take the drags). */
+.frame-shape { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 450; pointer-events: none; overflow: visible; }
+.shape-outside { fill: rgba(8, 10, 17, .28); }
+.shape-shade { fill: rgba(15, 15, 15, .55); }
+.shape-outline { fill: none; stroke: rgba(255, 255, 255, .95); stroke-width: 2; stroke-dasharray: 7 6; }
+.shape-line { fill: none; stroke: #fff; stroke-width: 2.5; stroke-dasharray: 10 6; stroke-linejoin: round; }
+.shape-name, .shape-size { fill: #fff; paint-order: stroke; stroke: rgba(10, 12, 20, .75); stroke-width: 4px; stroke-linejoin: round; }
+.shape-name { font: 650 13px var(--font); }
+.shape-size { font: 600 12px var(--mono); }
+.shape-points circle { fill: var(--accent); stroke: #fff; stroke-width: 2; }
+.shape-points circle.first { fill: #22d3ee; }
+/* the drawn contour's corners */
+.contour-corner { width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); cursor: grab; }
+.contour-corner.first { background: #22d3ee; width: 16px; height: 16px; }
+
+.guide-bar {
+  position: absolute; left: 50%; bottom: 18px; z-index: 1150; transform: translateX(-50%);
+  width: min(640px, calc(100% - 24px)); padding: 14px 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 8px;
+}
+/* over the map it stands right of the panel; over the model, left of it */
+.app[data-screen="map"] .guide-bar { left: calc(50% + 176px); width: min(600px, calc(100% - 380px)); }
+.app[data-screen="model"] .guide-bar { left: calc(50% - 172px); width: min(560px, calc(100% - 380px)); }
+.guide-head { display: flex; align-items: center; gap: 10px; }
+.guide-bar p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+.guide-bar .row { justify-content: flex-end; }
+
+.busy {
+  position: absolute; left: 50%; top: 50%; z-index: 1200; transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 18px; max-width: calc(100% - 24px);
+}
+.busy progress { width: 120px; }
+.spinner {
+  width: 20px; height: 20px; border-radius: 50%; border: 3px solid var(--accent-soft); border-top-color: var(--accent);
+  animation: spin .8s linear infinite; flex: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- the model ---------- */
+.view { position: absolute; inset: 0; touch-action: none; }
+.view canvas { display: block; width: 100%; height: 100%; }
+.panel {
+  position: absolute; top: 12px; right: 12px; bottom: 12px; z-index: 20; width: min(320px, calc(100% - 24px));
+  overflow: auto; padding: 4px 16px 14px; border-radius: 20px;
+}
+.panel .fold > summary { padding: 12px 2px; }
+.panel .slider { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; margin: 6px 0 10px; font-size: 13px; color: var(--ink-2); }
+.panel .slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+.panel .slider output { font: 600 12.5px/1.4 var(--mono); color: var(--ink); }
+.panel .check { display: flex; gap: 8px; align-items: center; margin: 6px 0; font-size: 13.5px; }
+.panel .check input { accent-color: var(--accent); }
+.panel .select { margin: 6px 0 10px; }
+.panel .seg { margin: 6px 0; }
+.panel .seg button { height: auto; min-height: 32px; padding: 6px; white-space: normal; line-height: 1.2; }
+.panel-note { margin-top: 10px; }
+/* How the camera moves, as one slim bar over the model (small and neat,
+   with symbols for a part): the two ways to move in words, a thin line, then To the centre, Whole
+   model and the panel as symbols, their words in the title. About 320 points wide: one row even
+   beside the panel on an iPad held upright. */
+.view-tools {
+  position: absolute; top: 10px; left: 10px; z-index: 18; display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
+  max-width: calc(100% - 370px); padding: 3px; border-radius: 12px;
+}
+.model-screen:has(> .panel[hidden]) .view-tools { max-width: calc(100% - 20px); }
+.view-tools .seg { flex: none; gap: 2px; padding: 0; border: 0; border-radius: 0; background: none; }
+.view-actions { display: flex; flex: none; gap: 2px; margin-left: 2px; padding-left: 4px; border-left: 1px solid var(--stroke); }
+.view-tools .seg button, .view-actions button {
+  flex: none; height: 28px; min-height: 0; padding: 0 9px; border: 0; border-radius: 9px; background: transparent;
+  color: var(--ink-2); font: 600 12px/1 var(--font); white-space: nowrap; overflow: visible; cursor: pointer;
+}
+.view-actions button { display: inline-grid; place-items: center; width: 30px; padding: 0; }
+.view-tools .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.view-actions button:focus-visible, .view-tools .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (hover: hover) {
+  .view-actions button:hover, .view-tools .seg button:hover:not([aria-pressed="true"]) { background: var(--glass-up); color: var(--ink); }
+}
+.view-tools .btn.small { height: 28px; min-height: 0; padding: 0 10px; border-radius: 9px; font-size: 12px; }
+/* a finger gets a little more, not the 40 points of the other buttons */
+@media (pointer: coarse) {
+  .view-tools .seg button, .view-actions button, .view-tools .btn.small { height: 32px; min-height: 0; }
+  .view-actions button { width: 34px; }
+}
+.fly-hint { flex-basis: 100%; padding: 0 6px 2px; }
+.fly-holding { flex-basis: 100%; margin: 2px 0 0; padding: 0 6px; color: var(--accent); font-weight: 650; }
+.fly-tools { display: flex; align-items: flex-start; gap: 10px; flex-basis: 100%; padding: 0 6px; flex-wrap: wrap; }
+.fly-rates summary { cursor: pointer; font-size: 13px; font-weight: 650; color: var(--ink-2); padding: 7px 0; }
+.fly-rate-list { display: grid; gap: 4px; padding-bottom: 4px; }
+.fly-rate-list label { display: grid; grid-template-columns: 70px 150px 58px; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.fly-rate-list output { font: 600 12px var(--mono); color: var(--ink); }
+.fly-rate-sets { gap: 6px; padding: 4px 0 6px; }
+.app[data-flying] .view { cursor: grab; }
+.half { padding: 8px 0 4px; border-top: 1px dashed var(--stroke); }
+.half-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.half-name { font-size: 13.5px; overflow-wrap: anywhere; }
+.model-caption {
+  position: absolute; left: 16px; bottom: 16px; z-index: 10; max-width: calc(100% - 370px); pointer-events: none;
+  color: var(--ink); text-shadow: 0 1px 8px var(--bg);
+}
+.model-caption .title { font-size: 20px; font-weight: 750; letter-spacing: -.01em; }
+.model-caption .meta { color: var(--ink-2); font-size: 13px; }
+/* the pencil by the model's name: the one part of the caption that takes a click */
+.model-caption .caption-edit {
+  pointer-events: auto; display: inline-grid; place-items: center; width: 30px; height: 30px; margin-left: 6px; vertical-align: middle;
+  border: 0; border-radius: 9px; background: transparent; color: var(--accent); cursor: pointer;
+}
+.model-caption .caption-edit:hover, .model-caption .caption-edit:focus-visible { background: var(--accent-soft); }
+@media (pointer: coarse) { .model-caption .caption-edit { width: 40px; height: 40px; } }
+
+/* the export menu */
+.menu-wrap { position: relative; }
+.menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: 280px; padding: 6px; border-radius: 16px;
+  background: var(--popup); box-shadow: 0 22px 44px -18px var(--shade); display: flex; flex-direction: column;
+}
+.menu-title { margin: 8px 10px 4px; color: var(--ink-3); font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.menu button {
+  display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--ink); font: 600 14px/1.2 var(--font); text-align: left; cursor: pointer;
+}
+.menu button .hint { font-weight: 400; }
+.menu button:hover, .menu button:focus-visible { background: var(--accent-soft); }
+
+.off-screen { visibility: hidden; }
+
+/* the turn dials by each half of a model of two places */
+.turn-dial {
+  position: absolute; left: 0; top: 0; z-index: 15; display: grid; grid-template-columns: auto auto auto; align-items: center;
+  gap: 2px 4px; padding: 6px 8px; border-radius: 16px; transform: translate(var(--x, 0px), var(--y, 0px));
+}
+.turn-dial button.turn-step { width: 30px; height: 30px; border: 1px solid var(--stroke); border-radius: 10px; background: var(--field); color: var(--ink); font-size: 16px; cursor: pointer; }
+.turn-dial input { width: 52px; padding: 4px 6px; border: 1px solid var(--stroke-up); border-radius: 8px; background: var(--field); color: var(--ink); font: 600 13px var(--mono); text-align: right; }
+/* the place's name, and beside it the pencil: only the pencil gives the part another place */
+.turn-dial .turn-name-row { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 2px; min-width: 0; }
+.turn-dial .turn-name {
+  padding: 2px 0 2px 6px; color: var(--ink-2); font: 600 12px/1.3 var(--font);
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.turn-dial .turn-edit {
+  display: grid; place-items: center; flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--accent); cursor: pointer;
+}
+.turn-dial .turn-edit:hover, .turn-dial .turn-edit:focus-visible { background: var(--accent-soft); }
+@media (pointer: coarse) { .turn-dial .turn-edit { width: 38px; height: 38px; } }
+
+/* a height shown where the model was clicked */
+.height-label { position: absolute; left: 0; top: 0; z-index: 14; pointer-events: none; transform: translate(var(--x, 0px), var(--y, 0px)); transition: opacity .6s; }
+.height-label.fading { opacity: 0; }
+.height-tag {
+  position: absolute; left: 0; bottom: 10px; transform: translateX(-50%); padding: 4px 9px; border-radius: 10px; white-space: nowrap;
+  background: rgba(14, 16, 26, .82); color: #fff; font: 600 13px/1.3 var(--mono); box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .6);
+}
+.height-place { font: 500 11.5px/1.3 var(--font); color: #c9ccdd; }
+.height-pin { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px var(--accent); }
+
+/* the ruler of heights over the model (height-ruler.js): its lines in an SVG over the view, each a
+   light one over a dark one; its two ends buttons carried by hand; the reading beside its top */
+.height-ruler { --ruler: #ffd23f; --shade: rgba(10, 12, 20, .74); position: absolute; inset: 0; z-index: 14; pointer-events: none; }
+.ruler-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ruler-shade { fill: none; stroke: var(--shade); stroke-width: 4; stroke-linecap: round; }
+.ruler-shade.wide { stroke-width: 6; }
+.ruler-bar { stroke: var(--ruler); stroke-width: 3; stroke-linecap: round; }
+.ruler-level { stroke: #fff; stroke-width: 2; stroke-dasharray: 6 5; }
+.ruler-ticks { fill: none; stroke: var(--ruler); stroke-width: 2; stroke-linecap: round; }
+.ruler-numbers text { fill: #fff; font: 600 11.5px var(--mono); paint-order: stroke; stroke: var(--shade); stroke-width: 3px; stroke-linejoin: round; }
+.ruler-zero, .ruler-top {
+  position: absolute; left: 0; top: 0; padding: 0; border-radius: 50%; pointer-events: auto; touch-action: none; cursor: grab;
+  transform: translate(var(--x, 0px), var(--y, 0px));
+}
+.ruler-zero {
+  z-index: 1; width: 20px; height: 20px; margin: -10px 0 0 -10px; border: 2px solid var(--ruler);
+  background: rgba(14, 16, 26, .9); color: #fff; font: 700 11px/1 var(--mono);
+}
+/* the top: a ring, the point it stands on seen through it */
+.ruler-top {
+  z-index: 2; width: 28px; height: 28px; margin: -14px 0 0 -14px; border: 3px solid var(--ruler); background: transparent;
+  box-shadow: 0 0 0 1.5px var(--shade), inset 0 0 0 1.5px var(--shade);
+}
+.ruler-zero::before, .ruler-top::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; }   /* more to grab */
+.ruler-zero.held, .ruler-top.held { cursor: grabbing; }
+.ruler-zero:focus-visible, .ruler-top:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* the reading over the ends' buttons, to be read; the pointer goes through it to them */
+.ruler-reading {
+  position: absolute; left: 0; top: 0; z-index: 3; padding: 5px 9px; border-radius: 10px; white-space: nowrap;
+  transform: translate(calc(var(--x, 0px) + 18px), calc(var(--y, 0px) - 50%));
+  background: rgba(14, 16, 26, .86); color: #fff; box-shadow: 0 6px 18px -8px rgba(0, 0, 0, .6);
+}
+.ruler-reading.left { transform: translate(calc(var(--x, 0px) - 100% - 18px), calc(var(--y, 0px) - 50%)); }
+.ruler-value { font: 700 14px/1.3 var(--mono); color: var(--ruler); }
+.ruler-more { font: 500 11.5px/1.35 var(--font); color: #c9ccdd; }
+/* why the model's number and the data's differ: a line of its own colour, wrapped when long */
+.ruler-why { max-width: 250px; white-space: normal; font: 500 11.5px/1.35 var(--font); color: #ffe39a; }
+.ruler-hint { flex-basis: 100%; padding: 0 6px 2px; }
+@media (pointer: coarse) { .ruler-zero::before, .ruler-top::before { inset: -12px; } }
+
+/* the worlds to choose from in the two-places guide */
+.world-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.world-card {
+  display: flex; align-items: center; gap: 10px; padding: 14px; border: 1px solid var(--stroke-up); border-radius: 16px;
+  background: var(--field); color: var(--ink); font: 600 15px var(--font); cursor: pointer;
+}
+.world-card:hover, .world-card:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+.world-dot { width: 26px; height: 26px; border-radius: 50%; flex: none; box-shadow: inset -5px -4px 8px rgba(0, 0, 0, .35); }
+.world-dot.earth { background: radial-gradient(circle at 35% 35%, #7cc4ff, #1f6fb2 60%, #1d4f2e); }
+.world-dot.moon { background: radial-gradient(circle at 35% 35%, #f1f1f1, #9a9a9a); }
+.world-dot.mars { background: radial-gradient(circle at 35% 35%, #f0a070, #b4471f); }
+.world-dot.venus { background: radial-gradient(circle at 35% 35%, #ffe2a8, #d1953a); }
+
+/* ---------- a phone held upright: the panels become sheets at the bottom ---------- */
+@media (max-width: 640px) {
+  .app-top { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .app-top .sub { display: none; }
+  .app-top .tools { margin-left: 0; width: 100%; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .app-top .tools > * { flex: none; }
+  .home-link .logo { width: 30px; height: 30px; }
+  .app-name { font-size: 17px; }
+  .tools .btn:not(.primary):not(.accent) .label { display: none; }
+  .map-panel { top: auto; bottom: 0; left: 0; width: 100%; max-height: 52%; border-radius: 20px 20px 0 0; }
+  .guide-bar, .app[data-screen] .guide-bar { bottom: auto; top: 10px; left: 50%; width: calc(100% - 24px); }
+  .panel { top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: 46%; border-radius: 20px 20px 0 0; }
+  .model-caption { bottom: calc(46% + 10px); max-width: calc(100% - 32px); }
+  .view-tools { max-width: calc(100% - 24px); }
+}
+@media (max-width: 900px) and (min-width: 641px) {
+  .tools .btn:not(.primary):not(.accent) .label { display: none; }
+}

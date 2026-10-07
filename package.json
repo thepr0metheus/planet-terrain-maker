@@ -1,0 +1,16 @@
+{
+  "name": "planet-terrain-maker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Planet Terrain Maker: tests of the page's code, and the libraries it carries (copied into web/vendor by npm run vendor).",
+  "scripts": {
+    "test": "node --test tests/js/*.test.js",
+    "test:py": "cd tests/py && python3 -m unittest discover -s .",
+    "vendor": "node tools/vendor.mjs"
+  },
+  "devDependencies": {
+    "leaflet": "1.9.4",
+    "three": "0.186.1"
+  }
+}

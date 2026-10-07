@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#080a11">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f3fa">
+<title>Planet Terrain Maker</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="ui.css">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<script src="ui.js" defer></script>
+<script type="module" src="js/app.js"></script>
+
+<div class="aurora" aria-hidden="true"></div>
+<div class="app" id="app">
+  <header class="app-top">
+    <button type="button" class="brand home-link" id="home-link" title="Saved models">
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+        <defs><linearGradient id="logo-glow" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c7dff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+        <rect width="64" height="64" rx="18" fill="url(#logo-glow)"/>
+        <circle cx="32" cy="30" r="17" fill="none" stroke="#fff" stroke-width="3.5"/>
+        <path d="M15 33l8-7 6 5 7-10 13 13" fill="none" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <path d="M12 47c6 4 13 6 20 6s14-2 20-6" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".75"/>
+      </svg>
+      <span class="brand-words">
+        <span class="app-name">Planet Terrain Maker</span>
+        <span class="sub">Terrain models from different planets</span>
+      </span>
+    </button>
+    <div class="tools" id="tools">
+      <button type="button" class="btn small" id="back-btn" hidden><span class="icon-slot" data-icon="back"></span><span class="label">Library</span></button>
+      <button type="button" class="btn small" id="model-back-btn" hidden title="Back to where the model came from: the map, or the library"><span class="icon-slot" data-icon="back"></span><span class="label">Back</span></button>
+      <button type="button" class="btn small" id="library-btn" hidden><span class="icon-slot" data-icon="book"></span><span class="label">Library</span></button>
+      <div class="menu-wrap" id="export-wrap" hidden>
+        <button type="button" class="btn small" id="export-btn" aria-haspopup="menu" aria-expanded="false"><span class="icon-slot" data-icon="out"></span><span class="label">Export</span></button>
+        <div class="menu glass" id="export-menu" role="menu" hidden>
+          <p class="menu-title">For printing</p>
+          <button type="button" role="menuitem" data-export="stl">STL <span class="hint">one solid, any slicer</span></button>
+          <button type="button" role="menuitem" data-export="3mf">3MF <span class="hint">one solid, millimetres</span></button>
+          <p class="menu-title">With the picture</p>
+          <button type="button" role="menuitem" data-export="glb">GLB <span class="hint">viewers, Blender, web</span></button>
+          <button type="button" role="menuitem" data-export="obj">OBJ <span class="hint">zip: model, materials, picture</span></button>
+          <button type="button" role="menuitem" data-export="usdz">USDZ <span class="hint">iPhone and iPad: in the room</span></button>
+          <p class="menu-title">Pictures</p>
+          <button type="button" role="menuitem" data-export="png">PNG <span class="hint">the view as it is</span></button>
+          <button type="button" role="menuitem" data-export="video">Video <span class="hint">a turn around the model</span></button>
+        </div>
+      </div>
+      <button type="button" class="btn small" id="copy-btn" hidden title="Save a copy of the model as it is on screen, under another name; the copy stays on screen"><span class="icon-slot" data-icon="layers"></span><span class="label">Copy</span></button>
+      <button type="button" class="btn small primary" id="save-btn" hidden><span class="icon-slot" data-icon="check"></span><span class="label">Save</span></button>
+      <button type="button" class="btn small" id="cache-btn" title="Clear this site's cache on this device: the map tiles, pictures and page files the browser keeps. The models on the server and other devices stay as they are."><span class="icon-slot" data-icon="trash"></span><span class="label">Clear the cache</span></button>
+      <button type="button" class="btn small primary" id="new-btn"><span class="icon-slot" data-icon="plus"></span><span class="label">New model</span></button>
+      <button type="button" class="btn small icon" id="key-btn" title="OpenTopography key" aria-label="OpenTopography key"><span class="icon-slot" data-icon="key"></span></button>
+      <button type="button" class="btn small lang-btn" id="lang-btn" title="Language: English or Russian">RU</button>
+      <button type="button" class="btn small icon" id="theme-btn" title="Light or dark" aria-label="Light or dark"><span class="icon-slot" data-icon="moon"></span></button>
+      <button type="button" class="btn small icon" id="fullscreen-btn" hidden title="Full screen" aria-label="Full screen">
+        <svg class="icon fs-enter" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+        <svg class="icon fs-exit" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" hidden><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="screens">
+    <!-- the saved models -->
+    <section class="screen library-screen" id="library-screen" aria-labelledby="library-title">
+      <div class="wrap">
+        <div class="deck-head">
+          <h2 class="kicker" id="library-title">Saved models <span class="count" id="library-count"></span></h2>
+          <p class="lead">Kept on the server: they open on every device.</p>
+        </div>
+        <div class="cards" id="library-cards"><p class="state">Loading the list…</p></div>
+        <section class="start-tips glass" id="start-tips">
+          <h3>How it works</h3>
+          <ol>
+            <li>Press <b>New model</b>, pick a world and find the place on the map.</li>
+            <li>Frame it with the circle, or draw your own contour, and capture it.</li>
+            <li>Set the size, the heights and the look; save it, or export it for printing.</li>
+          </ol>
+          <p>On the map, <b>Two places side by side</b> puts two places of any worlds on one round model, at the same scale: a crater on the Moon next to Elbrus.</p>
+        </section>
+        <section class="start-tips glass atlas-list" id="atlas-list">
+          <h3>Maps on other sites</h3>
+          <ul class="atlas-rows" id="atlas-rows"></ul>
+          <p>Found a place there? Find it here by name: <b>New model</b>, the world, the search.</p>
+        </section>
+        <footer class="credits">
+          Heights and pictures: Esri World Imagery, Sentinel-2 cloudless by EOX, AWS Terrain Tiles, Copernicus DEM via OpenTopography,
+          NASA Trek (Moon, Mars, Venus), USGS Gazetteer of Planetary Nomenclature; names and buildings © OpenStreetMap contributors.
+          The 3D view: three.js; the map: Leaflet.
+        </footer>
+      </div>
+    </section>
+
+    <!-- the map: find a place and frame it -->
+    <section class="screen map-screen" id="map-screen" hidden>
+      <div class="map" id="map"></div>
+      <div class="frame-circle" id="frame-circle" hidden><span class="frame-size" id="frame-size"></span></div>
+      <svg class="frame-shape" id="frame-shape" hidden aria-hidden="true"></svg>
+      <div class="map-panel glass" id="map-panel">
+        <div class="seg kinds" id="model-kind" role="group" aria-label="What the model shows">
+          <button type="button" data-kind="one" aria-pressed="true" title="A model of one place">One place</button>
+          <button type="button" data-kind="two" aria-pressed="false" title="Two places of any worlds side by side on one round model, at the same scale">Two places side by side</button>
+        </div>
+        <div class="seg worlds" id="worlds" role="group" aria-label="World">
+          <button type="button" data-world="earth">Earth</button>
+          <button type="button" data-world="moon">Moon</button>
+          <button type="button" data-world="mars">Mars</button>
+          <button type="button" data-world="venus">Venus</button>
+        </div>
+        <div class="place-search">
+          <label class="search">
+            <span class="search-icon icon-slot" data-icon="search"></span>
+            <input id="search" type="search" placeholder="Find a place" autocomplete="off" spellcheck="false" aria-label="Find a place" enterkeyhint="search">
+          </label>
+          <div class="search-results glass" id="search-results" hidden></div>
+        </div>
+        <div class="landers" id="landers-field" hidden>
+          <span class="landers-title">Craft on the surface</span>
+          <div class="place-search">
+            <label class="search">
+              <span class="search-icon icon-slot" data-icon="search"></span>
+              <input id="landers-search" type="search" placeholder="A name or a year" autocomplete="off" spellcheck="false" aria-label="Craft on the surface" title="The map goes to where the craft landed" enterkeyhint="search">
+            </label>
+            <div class="search-results glass" id="landers-results" hidden></div>
+          </div>
+        </div>
+        <div class="row start-row">
+          <button type="button" class="btn small" id="start-go" title="Back to where this world's map opens"><span class="icon-slot" data-icon="home"></span><span class="label">To the start</span></button>
+          <button type="button" class="btn small" id="start-set" title="This world's map will open here, on every device">Make this the start</button>
+          <button type="button" class="btn small" id="start-reset" title="This world's map will open at its usual place again" hidden>Usual start</button>
+        </div>
+        <div class="seg shapes" id="shapes" role="group" aria-label="Shape">
+          <button type="button" data-shape="circle">Circle</button>
+          <button type="button" data-shape="contour">Own contour</button>
+          <button type="button" data-shape="terrain" title="The edge follows the nearest ridge or valley around the circle">By the relief</button>
+        </div>
+        <div class="shape-help" id="circle-help">
+          <p class="hint">The circle's width follows the zoom of the map: it is written on the circle.</p>
+        </div>
+        <div class="shape-help" id="terrain-help" hidden>
+          <p class="hint">The edge follows the nearest ridge or valley around the circle, at most a fifth of its radius in or out. It is found again when the map stops.</p>
+          <div class="seg" id="terrain-follow" role="group" aria-label="What the edge follows">
+            <button type="button" data-follow="ridge" aria-pressed="true" title="The line of peaks round the place">Ridges</button>
+            <button type="button" data-follow="valley" aria-pressed="false" title="The low ground round the place">Valleys</button>
+          </div>
+          <p class="hint" id="terrain-state"></p>
+        </div>
+        <div class="shape-help" id="contour-help" hidden>
+          <p class="hint">Click the corners on the map. A click on the first corner, a double click or Enter closes the contour. Drag a corner to move it.</p>
+          <p class="hint">Cmd+Z or Ctrl+Z takes the last point back; with Shift it comes back.</p>
+          <div class="seg corners" id="contour-corners" role="group" aria-label="Corners of the contour">
+            <button type="button" data-corners="smooth" aria-pressed="true" title="A smooth line through the corners">Smooth corners</button>
+            <button type="button" data-corners="sharp" aria-pressed="false" title="Straight lines from corner to corner">Sharp corners</button>
+          </div>
+          <div class="row">
+            <button type="button" class="btn small" id="contour-undo">Undo corner</button>
+            <button type="button" class="btn small" id="contour-clear">Clear</button>
+          </div>
+          <p class="hint" id="contour-size"></p>
+        </div>
+        <div class="sources" id="sources">
+          <label>Heights <select id="heights-source"></select></label>
+          <label>Picture <select id="picture-source"></select></label>
+        </div>
+        <label class="picture-px">Picture detail
+          <select id="picture-px">
+            <option value="2048">Normal: 2048 points across</option>
+            <option value="4096">High: 4096 points across</option>
+            <option value="8192">Highest: 8192 points across</option>
+          </select>
+        </label>
+        <p class="hint" id="picture-res"></p>
+        <div class="row capture-row" id="capture-row">
+          <button type="button" class="btn primary" id="capture-btn">Capture this place</button>
+        </div>
+      </div>
+      <div class="busy glass" id="map-busy" hidden><span class="spinner" aria-hidden="true"></span><span id="map-busy-text"></span><progress id="map-busy-bar" max="1" value="0"></progress><button type="button" class="btn small" id="map-busy-stop">Stop</button></div>
+    </section>
+
+    <!-- the model -->
+    <section class="screen model-screen" id="model-screen" hidden>
+      <div class="view" id="view"></div>
+      <div class="view-tools glass" id="view-tools">
+        <div class="seg camera-modes" id="camera-modes" role="group" aria-label="How the camera moves">
+          <button type="button" data-camera="orbit" aria-pressed="true" title="The camera turns about the point clicked on the model; R and F tilt it">Around the model</button>
+          <button type="button" data-camera="fly" aria-pressed="false" title="The camera flies where you send it">Free flight</button>
+        </div>
+        <div class="view-actions" role="group" aria-label="The view">
+          <button type="button" id="orbit-centre" title="Turn about the middle of the model again" aria-label="To the centre">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M22 12h-4M6 12H2M12 6V2M12 22v-4"/></svg>
+          </button>
+          <button type="button" id="whole-model" title="The whole model in view again" aria-label="Whole model">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
+          </button>
+          <button type="button" id="ruler-toggle" aria-pressed="false" title="A ruler of heights: carry its top from point to point" aria-label="Height ruler">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="10" height="20" x="7" y="2" rx="2"/><path d="M7 6h4M7 10h2.5M7 14h4M7 18h2.5"/></svg>
+          </button>
+          <button type="button" id="panel-toggle" aria-pressed="false" title="Hide panel" aria-label="Hide panel">
+            <svg class="icon panel-close" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18M8 9l3 3-3 3"/></svg>
+            <svg class="icon panel-open" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" hidden><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18M10 15l-3-3 3-3"/></svg>
+          </button>
+        </div>
+        <p class="hint fly-holding" id="fly-holding" hidden></p>
+        <p class="hint ruler-hint" id="ruler-hint" hidden>The ruler: carry its ring to another point. Its foot keeps the level of the “0”; carry the “0” for another level. Esc puts the ruler away.</p>
+        <div class="fly-tools" id="fly-tools" hidden>
+          <button type="button" class="btn small" id="fly-level" title="The view back to the horizon, its tilt 0°. Key: Space">Level</button>
+          <details class="fly-rates" open>
+            <summary>Speeds</summary>
+            <div class="fly-rate-list" id="fly-rates">
+              <label title="W and S, the wheel; + and − too">Flight <input type="range" data-rate="move" min="-3" max="0" step="0.05" value="0"><output></output></label>
+              <label title="Q and E">Slide <input type="range" data-rate="slide" min="-3" max="0" step="0.05" value="0"><output></output></label>
+              <label title="Shift and Ctrl">Climb <input type="range" data-rate="climb" min="-3" max="0" step="0.05" value="0"><output></output></label>
+              <label title="A and D">Turn <input type="range" data-rate="turn" min="-3" max="0" step="0.05" value="0"><output></output></label>
+              <label title="R and F">Tilt <input type="range" data-rate="tilt" min="-3" max="0" step="0.05" value="0"><output></output></label>
+              <label title="How far the camera leans into a turn">Lean <input type="range" data-rate="bank" min="-3" max="0" step="0.05" value="0"><output></output></label>
+            </div>
+            <div class="row fly-rate-sets">
+              <button type="button" class="btn small" id="fly-defaults" title="The speeds a flight starts with">Default</button>
+              <button type="button" class="btn small" id="fly-mine" title="The set you saved: the same on every device">My set</button>
+              <button type="button" class="btn small" id="fly-keep" title="Keep these speeds as your set, for every device">Save as my set</button>
+            </div>
+          </details>
+        </div>
+        <p class="hint fly-hint" id="fly-hint" hidden>Drag to look. W and S fly forward and back, A and D turn, Q and E slide, Shift goes up and Ctrl down, R and F tilt the view and Space levels it. Two short quick taps of a key hold its move on; one more press lets it go. + and − change the speed, Alt held is slower, the wheel glides. On a phone: one finger looks, two fingers pinch and slide.</p>
+      </div>
+      <div class="model-caption" id="model-caption"></div>
+      <aside class="panel glass" id="panel">
+        <details class="fold bare" open>
+          <summary>Size</summary>
+          <label class="slider">Width <output id="size-val"></output><input type="range" id="size-mm" min="30" max="300" step="5"></label>
+          <label class="slider">Heights × <output id="z-val"></output><input type="range" id="z-scale" min="0.5" max="10" step="0.1"></label>
+          <label class="slider">Base <output id="base-val"></output><input type="range" id="base-mm" min="1" max="10" step="0.5"></label>
+          <label class="select">Detail
+            <select id="detail">
+              <option value="low">Low: quick</option>
+              <option value="standard">Standard</option>
+              <option value="fine">Fine: for printing</option>
+            </select>
+          </label>
+          <p class="hint" id="size-note"></p>
+        </details>
+        <details class="fold" id="two-places-fold" hidden open>
+          <summary>Two places</summary>
+          <label class="slider">Line <output id="angle-val"></output><input type="range" id="angle" min="0" max="359" step="1"></label>
+          <div class="row">
+            <button type="button" class="btn small" id="line-redraw" title="Draw the line anew on the model: through the centre or your own">New line…</button>
+            <button type="button" class="btn small" id="line-swap-model" title="Each place takes the other part">Swap the parts</button>
+          </div>
+          <div class="half" data-half="0">
+            <div class="half-head"><strong class="half-name"></strong><button type="button" class="btn small half-replace">Another place…</button></div>
+            <label class="slider">Turn <output class="turn-val"></output><input type="range" class="turn" min="0" max="359" step="1"></label>
+            <label class="slider">Raise <output class="raise-val"></output><input type="range" class="raise" min="-3000" max="3000" step="10"></label>
+          </div>
+          <div class="half" data-half="1">
+            <div class="half-head"><strong class="half-name"></strong><button type="button" class="btn small half-replace">Another place…</button></div>
+            <label class="slider">Turn <output class="turn-val"></output><input type="range" class="turn" min="0" max="359" step="1"></label>
+            <label class="slider">Raise <output class="raise-val"></output><input type="range" class="raise" min="-3000" max="3000" step="10"></label>
+          </div>
+          <div class="seg vertical" id="vertical" role="group" aria-label="How the heights stand">
+            <button type="button" data-vertical="sea-level" title="The heights as measured: the higher place stands higher">Each from sea level</button>
+            <button type="button" data-vertical="own-lowest" title="Both halves start at the base: only the relief compares">Lowest points level</button>
+          </div>
+        </details>
+        <details class="fold" open>
+          <summary>Picture</summary>
+          <label class="select">Style
+            <select id="style">
+              <option value="photo">Photo</option>
+              <option value="contours">Contour lines</option>
+              <option value="watercolor">Watercolour</option>
+              <option value="painterly">Painterly</option>
+              <option value="pencil">Pencil sketch</option>
+              <option value="tritone">Tritone</option>
+            </select>
+          </label>
+          <div id="style-options"></div>
+        </details>
+        <details class="fold" id="water-fold">
+          <summary>Water</summary>
+          <label class="check"><input type="checkbox" id="water-on"> Colour the water</label>
+          <label class="slider">Water level <output id="water-val"></output><input type="range" id="water-level" min="-500" max="500" step="1"></label>
+          <label class="check"><input type="checkbox" id="water-calm"> Calm water: a flat surface for printing</label>
+          <p class="hint">Everything below the level is water. On Earth the sea is at 0 m.</p>
+        </details>
+        <details class="fold" id="buildings-fold">
+          <summary>Buildings</summary>
+          <label class="check"><input type="checkbox" id="buildings-on"> Show the buildings</label>
+          <p class="hint" id="buildings-note">From OpenStreetMap, for places up to about 10 km across.</p>
+        </details>
+        <details class="fold">
+          <summary>Light</summary>
+          <label class="slider">Sun from <output id="sun-az-val"></output><input type="range" id="sun-az" min="0" max="359" step="1"></label>
+          <label class="slider">Sun height <output id="sun-el-val"></output><input type="range" id="sun-el" min="5" max="90" step="1"></label>
+        </details>
+        <p class="hint panel-note">A click on the model shows the height there for 10 seconds, and the view turns about that point from then on.</p>
+      </aside>
+      <div class="busy glass" id="model-busy" hidden><span class="spinner" aria-hidden="true"></span><span id="model-busy-text"></span></div>
+    </section>
+    <!-- the two-places guide: over the map while places are found, over the model while it is arranged -->
+    <div class="guide-bar glass" id="guide-bar" hidden>
+        <div class="guide-head"><span class="chip accent" id="guide-step"></span><strong id="guide-title"></strong></div>
+        <p id="guide-text"></p>
+        <div class="guide-line" id="guide-line" hidden>
+          <div class="seg" id="line-kind" role="group" aria-label="The line between the places">
+            <button type="button" data-line-kind="centre" aria-pressed="true" title="A straight line through the middle of the shape">Through the centre</button>
+            <button type="button" data-line-kind="drawn" aria-pressed="false" title="Points 1, 2, 3… clicked on the model, and a smooth line through them">By points</button>
+          </div>
+          <div class="row line-tune">
+            <button type="button" class="btn small icon" data-model-line="-5" title="Turn the line 5° back (anticlockwise)">↺</button>
+            <label class="line-deg" id="model-line-deg-label"><input type="number" id="model-line-deg" min="0" max="359" step="1" aria-label="Angle of the line, degrees">°</label>
+            <button type="button" class="btn small icon" data-model-line="5" title="Turn the line 5° on (clockwise)">↻</button>
+            <span class="line-draw" id="line-draw" hidden>
+              <button type="button" class="btn small" id="line-undo" title="Cmd+Z or Ctrl+Z; with Shift it comes back">Undo</button>
+              <button type="button" class="btn small" id="line-clear">Clear</button>
+            </span>
+            <button type="button" class="btn small" id="model-line-swap" title="Each place takes the other part">Swap the parts</button>
+          </div>
+        </div>
+        <div class="row guide-mask" id="guide-mask" hidden>
+          <span>Turn the shape</span>
+          <button type="button" class="btn small icon" data-mask="-5" title="Turn the shape 5° back (anticlockwise)">↺</button>
+          <label class="line-deg"><input type="number" id="mask-deg" min="0" max="359" step="5" aria-label="Turn of the shape, degrees">°</label>
+          <button type="button" class="btn small icon" data-mask="5" title="Turn the shape 5° on (clockwise)">↻</button>
+        </div>
+        <div class="seg worlds" id="guide-worlds" hidden role="group" aria-label="World">
+          <button type="button" data-world="earth">Earth</button>
+          <button type="button" data-world="moon">Moon</button>
+          <button type="button" data-world="mars">Mars</button>
+          <button type="button" data-world="venus">Venus</button>
+        </div>
+        <div class="row">
+          <button type="button" class="btn small" id="guide-back">Back</button>
+          <button type="button" class="btn small" id="guide-cancel">Cancel</button>
+          <button type="button" class="btn small primary" id="guide-next"></button>
+        </div>
+      </div>
+  </main>
+</div>
+
+<dialog id="key-dialog">
+  <form method="dialog">
+    <h2>OpenTopography key</h2>
+    <p class="form-note">Copernicus heights (30 m) need a free key from opentopography.org. The server keeps it for every device and never shows it again.</p>
+    <p class="form-note" id="key-state"></p>
+    <label>Key <input id="key-input" type="password" autocomplete="off" spellcheck="false"></label>
+    <p class="form-error" id="key-error" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn danger" id="key-remove">Remove the key</button>
+      <button type="button" class="btn" value="cancel" id="key-cancel">Cancel</button>
+      <button type="button" class="btn primary" id="key-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="name-dialog">
+  <form method="dialog">
+    <h2 id="name-title">Name of the model</h2>
+    <label>Name <input id="name-input" maxlength="120" autocomplete="off"></label>
+    <p class="form-error" id="name-error" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn" id="name-cancel">Cancel</button>
+      <button type="button" class="btn primary" id="name-ok">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="names-dialog">
+  <form method="dialog">
+    <h2>Names</h2>
+    <label>Model <input id="names-model" maxlength="120" autocomplete="off"></label>
+    <label id="names-place-0-label"><span id="names-place-0-word">Place</span> <input id="names-place-0" maxlength="120" autocomplete="off"></label>
+    <label id="names-place-1-label">Second place <input id="names-place-1" maxlength="120" autocomplete="off"></label>
+    <p class="form-error" id="names-error" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn" id="names-cancel">Cancel</button>
+      <button type="button" class="btn primary" id="names-ok">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="worlds-dialog">
+  <form method="dialog">
+    <h2 id="worlds-title"></h2>
+    <p class="form-note" id="worlds-text"></p>
+    <div class="world-cards" id="worlds-choice">
+      <button type="button" class="world-card" data-world="earth"><span class="world-dot earth"></span>Earth</button>
+      <button type="button" class="world-card" data-world="moon"><span class="world-dot moon"></span>Moon</button>
+      <button type="button" class="world-card" data-world="mars"><span class="world-dot mars"></span>Mars</button>
+      <button type="button" class="world-card" data-world="venus"><span class="world-dot venus"></span>Venus</button>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" id="worlds-back">Back</button>
+      <button type="button" class="btn" id="worlds-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden role="status">
+  <span class="toast-text"></span>
+  <button type="button" class="toast-action" hidden></button>
+  <button type="button" class="toast-close" aria-label="Close"></button>
+</div>
