@@ -143,6 +143,7 @@ the page loads nothing from other sites:
 | `keys.py` | the OpenTopography key, set on the page and kept in `data/keys` (mode 600), never sent back |
 | `settings.py` | where each world's map opens and your set of flight speeds, the same on every device |
 | `apispec.py` | `/openapi.json` from the routes, and `docs/http-api.md` from it |
+| `packages.py` | what this copy runs on, for a check of known vulnerabilities (`GET /api/packages`) |
 
 The page (`web/`) is ES modules with no build step. `ui.css`, `ui.js` and `theme.js` hold the base
 look and a few small tools; `style.css` and `web/js/` hold the app. three.js 0.186.1 and Leaflet
@@ -163,6 +164,10 @@ python3 -m app.apispec > docs/http-api.md             # after a change of the AP
 ```
 
 The HTTP API is described at `/openapi.json` and in [docs/http-api.md](docs/http-api.md).
+
+`GET /api/packages` lists what a running copy is made of: its Python libraries, the page's libraries
+and the system's packages, each named as [osv.dev](https://osv.dev) names it. Send them to osv.dev's
+`/v1/querybatch` as they are to learn which have known vulnerabilities.
 
 ## Data and credits
 

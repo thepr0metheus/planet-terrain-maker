@@ -161,6 +161,12 @@ One file of a saved model.
 - 400: most is out of range.
 - 404: No such model or file.
 
+## GET `/api/packages`
+
+What this copy runs on: its libraries, the page's, and the system's, to check for known vulnerabilities.
+
+- 200: {version: the commit, runtime: {name, version}, os: {name, version, listed} or null, packages: [{ecosystem, name, version}]}. Each package is named as osv.dev names it; os.listed false: the system's packages are not in the list.
+
 ## GET `/api/place`
 
 The name of the place on Earth at a point, at about the size of a town (Nominatim).

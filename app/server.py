@@ -24,6 +24,7 @@ from .fetch import Fetcher, FetchError
 from .grids import Grid
 from .keys import KeyStore
 from .library import Library, NotFound, Refused
+from .packages import InstalledPackages
 from .pictures import PictureSizes
 from .places import Nominatim
 from .settings import Refused as SettingRefused, Settings
@@ -180,7 +181,8 @@ class ClientErrors:
                 log(f"client errors are not kept: {e}")
 
 
-def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str | None = None) -> Flask:
+def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str | None = None,
+               installed: InstalledPackages | None = None) -> Flask:
     data_dir = Path(data_dir)
     fetcher = fetcher or Fetcher()
     app = Flask(__name__, static_folder=None)
@@ -198,6 +200,7 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
     client_errors = ClientErrors(data_dir / "client-errors.jsonl")
     pictures = PictureSizes(data_dir / "cache" / "pictures", log=log)
     asteroids = AsteroidShapes(fetcher, data_dir / "cache" / "asteroids", WEB / "data" / "asteroids-top.json", log=log)
+    installed = installed or InstalledPackages(vendor_versions=WEB / "vendor" / "VERSIONS.json")
 
     @app.errorhandler(BadRequest)
     def bad_request(e):
@@ -245,6 +248,14 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
     def openapi():
         """The description of this API, made from its routes."""
         return jsonify(build(app, version()))
+
+    @app.get("/api/packages")
+    @api(responses={200: "{version: the commit, runtime: {name, version}, os: {name, version, listed} or null, "
+                         "packages: [{ecosystem, name, version}]}. Each package is named as osv.dev names it; "
+                         "os.listed false: the system's packages are not in the list."})
+    def packages_installed():
+        """What this copy runs on: its libraries, the page's, and the system's, to check for known vulnerabilities."""
+        return jsonify({"version": version(), **installed.listing()})
 
     # ---------- maps and data ----------
 

@@ -1,5 +1,8 @@
 FROM python:3.13-alpine
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# The base image is rebuilt now and then, Alpine's fixes come any day: take those that came since
+# (zlib 1.3.2-r1 came five days after the image of 2026-10-01)
+RUN apk upgrade --no-cache
 WORKDIR /app
 # VERSION names the commit when the code comes as a `git archive` copy; a plain clone leaves its
 # placeholder, and /healthz then says "working copy". REQUIRE_COMMIT=1 stops such a build instead.
