@@ -142,6 +142,17 @@ export class TerrainModel {
     this._divider = null;
   }
 
+  // Replace only the picture. Its old library file must stop being the file that Save sends.
+  // Heights, the frame and the split's turns remain those chosen on the map and model.
+  setPicture(index, { picture, source }) {
+    const place = this.places[index];
+    if (!place) throw new RangeError('Unknown place');
+    place.picture = picture;
+    place.stored = null;
+    place.sources = { ...place.sources, picture: source.label, ...source.metadata };
+    this._picture = null;
+  }
+
   // The ground at (u, v): the height in metres as its source gives it, and which place it is (null
   // for a model of one place). On two places it is the place's own height: no lift, no raise.
   groundAt(u, v) {

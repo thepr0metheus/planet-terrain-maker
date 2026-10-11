@@ -39,10 +39,10 @@ export class MapScreen {
       const key = (what) => (id === 'earth' ? `ptm.${what}` : `ptm.${what}.${id}`);
       return [id, {
         heights: new StoredChoice(key('heights'), { allowed: WORLDS[id].heights.map((s) => s.id) }),
-        picture: new StoredChoice(key('picture'), { allowed: pictureOptions(WORLDS[id]).map((s) => s.id) }),
+        picture: new StoredChoice(key('picture'), { allowed: this._pictureOptions(WORLDS[id]).map((s) => s.id) }),
       }];
     }));
-    this._pxChoice = new StoredChoice('ptm.picturePx', { allowed: ['2048', '4096', '8192'] });
+    this._pxChoice = new StoredChoice('ptm.pictureDetail', { allowed: ['auto', '2048', '4096', '8192'] });
     this._cornersChoice = new StoredChoice('ptm.corners', { allowed: ['smooth', 'sharp'] });
     this._followChoice = new StoredChoice('ptm.follow', { allowed: ['ridge', 'valley'] });
     this._terrain = null;           // the edge found in the relief: { world, center, radiusM, follow, points, strength, reason }
@@ -55,7 +55,7 @@ export class MapScreen {
 
     this.view = new MapView({
       element: $('map'), frame: $('frame-circle'), sizeLabel: $('frame-size'), shape: $('frame-shape'),
-      panels: () => [$('map-panel')], bars: () => [$('guide-bar')],
+      panels: () => [$('map-panel')],
       onMove: () => this._moved(),
     });
     this.contour = new ContourTool({ onChange: (state) => this._contourChanged(state), smooth: this._cornersChoice.get('smooth') === 'smooth' });
@@ -104,8 +104,6 @@ export class MapScreen {
     });
     $('picture-source').addEventListener('change', () => {
       this._choices[this.world].picture.set($('picture-source').value);
-      // the map shows the picture the model will get
-      this.view.setBase(this._picture(this.world).map ?? null);
       this._sources(this.view.world);
     });
     $('picture-px').addEventListener('change', () => {
@@ -123,7 +121,8 @@ export class MapScreen {
     const world = worldOf(id);
     const changed = this.view.world?.id !== id;
     this.contour.detach();
-    this.view.showWorld(id, view ?? this._starts[id] ?? null, this._picture(id).map ?? null);
+    // Earth always uses Sentinel-2 for selection; the model's source is chosen in later steps.
+    this.view.showWorld(id, view ?? this._starts[id] ?? null, id === 'earth' ? world.pictures.find((p) => p.id === 's2').map : null);
     if (changed) this.search.reset();
     if (this._shape === 'contour' && this._shapesOn) this.contour.attach(this.view.map);
     this._terrain = null;
@@ -226,7 +225,7 @@ export class MapScreen {
   // (compare-flow.js); the shape on the map is the guide's to set (view.setOverlay).
   guide(step) {
     this._guide = step;
-    $('capture-row').hidden = step !== null;
+    $('capture-row').hidden = true; // Both kinds use the guide's source-selection and capture steps.
     if (step === null || step === 'place') {
       this.view.setOverlay(null);
       this.view.holdWidth(null);
@@ -235,6 +234,26 @@ export class MapScreen {
   }
 
   get guideStep() { return this._guide; }
+
+  setSources({ world, pictureId, heightsId }) {
+    if (pictureId) this._choices[world].picture.set(pictureId);
+    if (heightsId) this._choices[world].heights.set(heightsId);
+    this._sources(worldOf(world));
+  }
+
+  lockSelection(on) {
+    this.view.lock(on);
+    $('map-screen').toggleAttribute('data-selection-locked', on);
+    if (on && !this._disabledControls) {
+      this._disabledControls = [...$('map-panel').querySelectorAll('button, input, select')].map((el) => [el, el.disabled]);
+      for (const [el] of this._disabledControls) el.disabled = true;
+      this.contour.detach();
+    } else if (!on && this._disabledControls) {
+      for (const [el, disabled] of this._disabledControls) el.disabled = disabled;
+      this._disabledControls = null;
+      if (this._shape === 'contour' && this._shapesOn) this.contour.attach(this.view.map);
+    }
+  }
 
   // ---------- the frame ----------
 
@@ -366,7 +385,6 @@ export class MapScreen {
   // holds such a canvas (a computer); an iPad and an iPhone get 4096 at most (device.js). The choice
   // kept, or 4096 (2048 on a touch screen) to start with.
   _fitPictureDetail() {
-    const phone = DEVICE.touch;
     let texture = 4096;
     try {
       const gl = document.createElement('canvas').getContext('webgl2');
@@ -375,19 +393,25 @@ export class MapScreen {
       // no WebGL 2: the smaller pictures only
     }
     const most = Math.min(8192, texture, DEVICE.canvasMostPx);
+    this._pictureMost = most;
     for (const option of $('picture-px').options) option.hidden = option.disabled = Number(option.value) > most;
-    const kept = Number(this._pxChoice.get(''));
-    $('picture-px').value = String(kept && kept <= most ? kept : phone ? 2048 : Math.min(4096, most));
+    const kept = this._pxChoice.get('auto');
+    $('picture-px').value = kept === 'auto' || Number(kept) <= most ? kept : 'auto';
   }
 
   get picturePx() {
-    return Number($('picture-px').value) || 2048;
+    return $('picture-px').value === 'auto' ? 'auto' : Number($('picture-px').value) || 2048;
   }
 
   // The picture chosen for a world: one of pictureOptions(world), the first by default.
+  _pictureOptions(world) {
+    return [...pictureOptions(world), ...(world.id === 'earth' ? [{ id: 'custom', label: 'Custom picture source' }] : [])];
+  }
+
   _picture(id) {
-    const options = pictureOptions(worldOf(id));
-    return options.find((p) => p.id === this._choices[id].picture.get()) ?? options[0];
+    const world = worldOf(id);
+    const options = this._pictureOptions(world);
+    return options.find((p) => p.id === this._choices[id].picture.get()) ?? options.find((p) => p.id === 's2') ?? options[0];
   }
 
   // The heights chosen for a world, the first by default.
@@ -412,7 +436,16 @@ export class MapScreen {
     }
     const frame = frameFor(outline);
     const side = Math.max(frame.widthM, frame.heightM);
-    const source = pictureSourceFor(world, this._picture(world.id).id, side);
+    const chosen = this._picture(world.id);
+    if (this.picturePx === 'auto') {
+      $('picture-res').textContent = t('Picture detail is chosen automatically from the source and this device.');
+      return;
+    }
+    if (chosen.id === 'custom') {
+      $('picture-res').textContent = t('The custom picture uses the coordinates of this place.');
+      return;
+    }
+    const source = pictureSourceFor(world, chosen.id, side);
     const metres = pictureMetres(world, source, f.lat, side, this.picturePx);
     const n = number(metres, metres < 10 ? 1 : 0);
     $('picture-res').textContent = t('Picture: about {m} a point. Source: {source}.', { m: t('{n} m', { n }), source: t(source.label) });
@@ -469,15 +502,16 @@ export class MapScreen {
 
   // Capture a place: { world, center, outline, turnable }. The place, or null when it failed (said
   // why) or was stopped.
-  async capture({ world, center, outline, turnable = false }, what = null) {
+  async capture({ world, center, outline, turnable = false, heightsId = this._heights(world).id,
+    pictureId = this._picture(world).id, pictureSource = null }, what = null) {
     this._abort = new AbortController();
     this._busy(true, what ?? t('Capturing the place…'));
     try {
       const place = await this._capture.capture({
-        world, center, outline, turnable, signal: this._abort.signal, picturePx: this.picturePx,
+        world, center, outline, turnable, signal: this._abort.signal, picturePx: this.picturePx, pictureMostPx: this._pictureMost,
         // the choices of the place's own world: in the two-places guide the first place is
         // captured while the map shows the second one's
-        heightsId: this._heights(world).id, pictureId: this._picture(world).id,
+        heightsId, pictureId, pictureSource,
       });
       this._progress(t('Naming the place…'));
       place.name = await this.nameOf(world, center);
@@ -520,7 +554,7 @@ export class MapScreen {
       select.title = t(list.find((s) => s.id === select.value)?.hint ?? '');
     };
     fill($('heights-source'), world.heights, this._heights(world.id).id);
-    fill($('picture-source'), pictureOptions(world), this._picture(world.id).id);
+    fill($('picture-source'), this._pictureOptions(world), this._picture(world.id).id);
     this._pictureHint();
   }
 
@@ -546,7 +580,7 @@ export class MapScreen {
   // Ctrl+Y), Esc clears, Enter closes the contour. The keys are read by their place on the keyboard,
   // so Cmd+Z works with the Russian layout too.
   _key(e) {
-    if ($('map-screen').hidden || e.target.closest('input, select, textarea')) return;
+    if ($('map-screen').hidden || this._disabledControls || e.target.closest('input, select, textarea')) return;
     const tool = this._shape === 'contour' && this._shapesOn ? this.contour : null;
     if (!tool) return;
     const command = (e.metaKey || e.ctrlKey) && !e.altKey;

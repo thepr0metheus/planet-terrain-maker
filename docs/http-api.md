@@ -167,6 +167,58 @@ What this copy runs on: its libraries, the page's, and the system's, to check fo
 
 - 200: {version: the commit, runtime: {name, version}, os: {name, version, listed} or null, packages: [{ecosystem, name, version}]}. Each package is named as osv.dev names it; os.listed false: the system's packages are not in the list.
 
+## GET `/api/picture-sources`
+
+List user-entered sources shared by devices, from the mounted data directory.
+
+- 200: Saved user-entered sources, newest first: [{key, url, name, credit, maxZoom}].
+- 503: The data file could not be read.
+
+## POST `/api/picture-sources`
+
+Remember a source as runtime data only; no upstream request is made.
+
+- body: {url, name, credit, maxZoom} as JSON. maxZoom is null for automatic detail.
+- 200: The updated source list, newest first; the same URL is stored once.
+- 400: Invalid source.
+- 503: The data file could not be read or written.
+
+## DELETE `/api/picture-sources`
+
+Forget a saved URL without changing any model's captured picture.
+
+- body: {url} as JSON. Only this saved source is forgotten.
+- 200: The remaining source list.
+- 400: Invalid URL.
+- 503: The data file could not be read or written.
+
+## GET `/api/picture-sources/{key}/tiles/{z}/{x}/{y}`
+
+A detailed tile that a browser has already downloaded and saved.
+
+- `key` (path, string, required)
+- `z` (path, integer, required)
+- `x` (path, integer, required)
+- `y` (path, integer, required)
+- 200: A persisted detailed PNG/JPEG tile.
+- 400: Invalid tile address.
+- 404: Not downloaded yet.
+- 503: Data could not be read.
+
+## PUT `/api/picture-sources/{key}/tiles/{z}/{x}/{y}`
+
+Persist a browser-fetched tile without making an upstream request.
+
+- `key` (path, string, required)
+- `z` (path, integer, required)
+- `x` (path, integer, required)
+- `y` (path, integer, required)
+- body: A 256 by 256 PNG/JPEG tile, at most 1 MiB, as raw bytes.
+- 204: Saved in mounted data.
+- 400: Invalid tile address or image.
+- 404: Unknown source key.
+- 503: Data could not be written.
+
 ## GET `/api/place`
 
 The name of the place on Earth at a point, at about the size of a town (Nominatim).

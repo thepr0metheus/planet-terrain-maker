@@ -1,6 +1,6 @@
 // The two-places guide at work: what CompareWizard decides, done on the map and model screens, and
-// the guide's bar and world dialog drawn from its view. The first place is captured as soon as it is
-// framed, and the line between the places is drawn on its model, in 3D (line-tool.js): through the
+// the guide's bar and world dialog drawn from its view. Each place is captured after its picture
+// and heights are chosen. The line between two places is drawn on its first model in 3D: through the
 // centre at a turn, or the user's own points clicked on the model. Once drawn, the line is a Divider
 // in metres about the first place's centre (divider.js). While the second place is found on the map,
 // the shape (the mask) can be turned over it; the line stays as drawn and the place takes the turn
@@ -13,6 +13,7 @@ import { defaultVertical, normalTurn, toMetres, turnForMask } from './split.js';
 import { worldOf } from './worlds.js';
 import { formatDistance } from './map-view.js';
 import { t } from './i18n.js';
+import { CaptureSources } from './capture-sources.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,6 +36,8 @@ export class CompareFlow {
     this._second = null;            // the second place's map, to come back to: { world, where }
     this._line = null;              // the line once drawn: a Divider
     this._maskTurn = 0;             // the shape turned over the map while a place is found for a part
+    this._selections = new Map();   // place1/place2/replace -> frozen framing and its source choices
+    this.sources = new CaptureSources();
     this.lineTool = new LineTool(() => this._lineChanged());
     this.wizard = new CompareWizard(this._steps(), (view) => this._draw(view));
 
@@ -73,9 +76,9 @@ export class CompareFlow {
     // One place or two: chosen on the map. The guide takes the choice of world while it looks for a
     // place; while the line is drawn the world stays.
     map.onKind = (kind) => {
-      if (kind === 'two' && !this.wizard.active) this.startHere();
-      else if (kind === 'one' && this.wizard.active) this.wizard.cancel();
-      map.setKind(this.wizard.active ? 'two' : 'one');
+      if (this.wizard.kind === kind && this.wizard.active) return;
+      this.wizard.cancel();
+      this.startHere(kind);
     };
     map.onWorldPicked = (id) => {
       if (['line', 'reline'].includes(this.wizard.step)) return true;
@@ -87,7 +90,7 @@ export class CompareFlow {
 
   start() { this.wizard.start(); }
   // The map's "Two places side by side": the place framed now is the first place.
-  startHere() { this.wizard.startAt(this._map.world); }
+  startHere(kind = 'two') { this.wizard.startAt(this._map.world, kind); }
   replace(index) { this.wizard.replace(index); }
   redrawLine() { this.wizard.redrawLine(); }
 
@@ -154,30 +157,76 @@ export class CompareFlow {
 
   _steps() {
     return {
-      begin: () => {
+      begin: (kind = 'two') => {
         this._first = null;
         this._firstPlace = null;
         this._firstModel = null;
         this._second = null;
         this._line = null;
         this._maskTurn = 0;
+        this._selections.clear();
+        this._map.lockSelection(false);
         this.lineTool.stop();
         this._map.guide('place');
-        this._map.setKind('two');
+        this._map.setKind(kind);
       },
       showWorld: (id) => {
         this._app.show('map');
         this._map.showWorld(id);
       },
+      pickPlace: (origin) => {
+        let selection;
+        if (origin === 'place1') selection = this._map.framedShape();
+        else {
+          const framed = this._map.framed();
+          selection = { ...framed, outline: origin === 'replace' ? this._models.model.outline : this._first.outline };
+        }
+        if (!selection) return false;
+        this.sources.refresh();
+        selection.turnable = this.wizard.kind === 'two';
+        selection.turnDeg = origin === 'place1' ? 0 : turnForMask(this._maskTurn);
+        this._selections.set(origin, selection);
+        return true;
+      },
+      showSources: (stage) => {
+        this._map.lockSelection(true);
+        this.sources.show(stage);
+      },
+      pictureReady: async () => {
+        const picture = await this.sources.picture();
+        if (!picture) return false;
+        Object.assign(this._selections.get(this.wizard.sourceFrom), picture);
+        return true;
+      },
+      backToPlace: () => {
+        this._map.lockSelection(false);
+        this.sources.show(null);
+      },
+      backToSources: () => {
+        this.lineTool.stop();
+        const selection = this._selections.get(this.wizard.sourceFrom);
+        const model = this._models.model;
+        if (model.isSplit) selection.turnDeg = model.compare.turns[this.wizard.sourceFrom === 'place1' ? 0 : 1];
+        this._app.show('map');
+        this._map.lockSelection(false);
+        this._map.guide(this.wizard.sourceFrom === 'place1' ? 'place' : 'other');
+        this._map.showWorld(selection.world, selection.where);
+        this._map.setSources(selection);
+        this.sources.restore(selection.pictureSource);
+      },
       // The first place captured at once and shown alone in 3D, the line to be drawn on it.
       captureFirst: async () => {
-        const first = this._map.framedShape();
+        const first = this._selections.get('place1');
         if (!first) return null;
-        const place = await this._map.capture({ ...first, turnable: true }, t('Capturing the first place…'));
+        first.heightsId = this.sources.heightsId;
+        const place = await this._map.capture(first, t('Capturing the first place…'));
         if (!place) return null;
+        if (first.captured) place.name = first.captured.name;
+        first.captured = place;
         this._first = first;
         this._firstPlace = place;
-        this._firstModel = new TerrainModel({ places: [place] });
+        const previous = this._firstModel;
+        this._firstModel = new TerrainModel({ places: [place], settings: previous?.settings, name: previous?.name, id: previous?.id });
         this._line = null;
         this._app.modelFrom('map');
         this._app.show('model');
@@ -212,6 +261,8 @@ export class CompareFlow {
       },
       findSecond: () => {
         this.lineTool.stop();
+        this._map.lockSelection(false);
+        this.sources.show(null);
         this._map.guide('other');
         this._outlineOther = this._first.outline;
         this._namesOther = [this._firstPlace?.name ?? t('First place'), t('Second place')];
@@ -223,17 +274,25 @@ export class CompareFlow {
       // The second place captured in the first one's shape; with the first, already captured, and the
       // line, the model of two places.
       captureSecond: async () => {
-        const second = this._map.framed();
+        const second = this._selections.get('place2');
         this._second = { world: second.world, where: second.where };
-        const b = await this._map.capture({ world: second.world, center: second.center, outline: this._first.outline, turnable: true }, t('Capturing the second place…'));
+        second.heightsId = this.sources.heightsId;
+        const b = await this._map.capture(second, t('Capturing the second place…'));
         if (!b) return false;
+        const recapturing = Boolean(second.captured);
+        if (second.captured) b.name = second.captured.name;
+        second.captured = b;
         const a = this._firstPlace, line = this._line;
+        const previous = this._models.model.isSplit ? this._models.model : null;
         const model = new TerrainModel({
           places: [a, b],
           compare: {
-            angleDeg: line.angleDeg, points: line.points, smooth: line.smooth, vertical: defaultVertical([a.world, b.world]),
-            turns: [0, turnForMask(this._maskTurn)],
+            ...previous?.compare,
+            angleDeg: line.angleDeg, points: line.points, smooth: line.smooth,
+            vertical: recapturing && previous ? previous.compare.vertical : defaultVertical([a.world, b.world]),
+            turns: [previous?.compare.turns[0] ?? 0, second.turnDeg],
           },
+          settings: previous?.settings, name: previous?.name, id: previous?.id,
         });
         this._app.modelFrom('map');
         this._app.show('model');
@@ -241,8 +300,8 @@ export class CompareFlow {
         return true;
       },
       arrange: () => {
-        $('two-places-fold').hidden = false;
-        $('two-places-fold').open = true;
+        $('two-places-fold').hidden = !this._models.model.isSplit;
+        if (this._models.model.isSplit) $('two-places-fold').open = true;
       },
       backToSecond: () => {
         this._app.show('map');
@@ -253,6 +312,8 @@ export class CompareFlow {
       save: () => this._models.save(),
       end: () => {
         this.lineTool.stop();
+        this._map.lockSelection(false);
+        this.sources.show(null);
         this._first = null;
         this._firstPlace = null;
         this._firstModel = null;
@@ -277,13 +338,19 @@ export class CompareFlow {
       },
       captureReplacement: async (index) => {
         const model = this._models.model;
-        const framed = this._map.framed();
-        const place = await this._map.capture({ world: framed.world, center: framed.center, outline: model.outline, turnable: true }, t('Capturing the new place…'));
+        const framed = this._selections.get('replace');
+        framed.heightsId = this.sources.heightsId;
+        const place = await this._map.capture(framed, t('Capturing the new place…'));
         if (!place) return false;
+        framed.captured = place;
+        this._selections.set(index === 0 ? 'place1' : 'place2', framed);
         model.replacePlace(index, place);
         const turns = [...model.compare.turns];
-        turns[index] = turnForMask(this._maskTurn);
+        turns[index] = framed.turnDeg;
         model.arrange({ turns });
+        this._firstPlace = model.places[0];
+        this._first = this._selections.get('place1') ?? this._first;
+        this._firstModel = new TerrainModel({ places: [this._firstPlace], settings: model.settings });
         this._app.show('model');
         this._models.show(model);
         return true;
@@ -317,6 +384,9 @@ export class CompareFlow {
     const dialog = $('worlds-dialog'), bar = $('guide-bar');
     if (view.kind !== 'dialog' && dialog.open) dialog.close();
     bar.hidden = view.kind !== 'bar';
+    this.sources.show(view.sources ?? null);
+    for (const el of $('sources').querySelectorAll('input, select')) el.disabled = Boolean(view.busy);
+    if (!view.sources) this._map.lockSelection(false);
     if (view.kind === 'dialog') {
       $('worlds-title').textContent = view.title;
       $('worlds-text').textContent = view.text;
@@ -325,7 +395,7 @@ export class CompareFlow {
       return;
     }
     if (view.kind !== 'bar') return;
-    $('guide-step').textContent = t('Step {n} of 4', { n: view.step });
+    $('guide-step').textContent = t('Step {n} of {total}', { n: view.step, total: view.total ?? 8 });
     $('guide-title').textContent = view.title;
     $('guide-text').textContent = view.text;
     $('guide-worlds').hidden = !view.worlds;

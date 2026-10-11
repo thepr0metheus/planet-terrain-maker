@@ -6,6 +6,7 @@ import { TerrainModel } from '../../web/js/model.js';
 import { Place } from '../../web/js/capture.js';
 import { HeightGrid } from '../../web/js/height-grid.js';
 import { CircleOutline } from '../../web/js/outline.js';
+import { CustomLayer } from '../../web/js/custom-layer.js';
 
 const canvas = (side) => ({ width: side, height: side });
 
@@ -84,4 +85,39 @@ test('with the file gone, a full picture is made again, and a smaller one is not
   await at.library.save(full, null, madeAgain([7], made));
   assert.deepEqual(made, [8192]);
   assert.deepEqual([...at.models[id].files['place-0.jpg']], [7]);
+});
+
+test('a saved custom picture and its source credit reopen without a custom tile service', async () => {
+  const at = server();
+  const id = await saved(at);
+  const model = await at.library.open(id, async () => canvas(8192));
+  model.places[0].sources = { heights: 'Copernicus', picture: 'My map', pictureCredit: 'Example mapping agency', customPicture: true };
+  await at.library.save(model, null, madeAgain([9]));
+  const reopened = await at.library.open(id, async () => canvas(4096));
+  assert.deepEqual(reopened.places[0].sources, model.places[0].sources);
+  assert.deepEqual([...at.models[id].files['place-0.jpg']], [1, 2, 3]);
+});
+
+test('applying a custom picture to a saved model saves the new picture, not its old stored JPEG', async () => {
+  const at = server();
+  const id = await saved(at);
+  const model = await at.library.open(id, async () => canvas(4096));
+  const place = model.places[0];
+  const heights = place.heights, center = place.center, frame = place.frame;
+  const originalPicture = model.picture();
+  const picture = canvas(2048);
+  const source = new CustomLayer({ url: 'https://tiles.example.org/{z}/{x}/{y}.png', name: 'My map', credit: 'Example mapping agency' });
+  model.setPicture(0, { picture, source });
+  assert.notEqual(model.picture(), originalPicture, 'composed picture cache is invalidated');
+  assert.equal(model.picture(), picture);
+  assert.equal(place.stored, null, 'the previous stored image no longer owns this picture');
+  assert.equal(place.heights, heights);
+  assert.equal(place.center, center);
+  assert.equal(place.frame, frame);
+  await at.library.save(model, null, madeAgain([9, 8, 7]));
+  assert.deepEqual([...at.models[id].files['place-0.jpg']], [9, 8, 7]);
+  assert.equal(at.models[id].meta.places[0].picture.width, 2048);
+  const reopened = await at.library.open(id, async () => canvas(2048));
+  assert.equal(reopened.places[0].sources.pictureCredit, 'Example mapping agency');
+  assert.ok(!JSON.stringify(at.models[id].meta).includes('tiles.example.org'));
 });

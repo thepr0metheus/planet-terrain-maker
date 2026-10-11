@@ -13,6 +13,7 @@ import { mPerDegOf, worldOf } from './worlds.js';
 import { stretchLevels } from './contrast.js';
 import { DEVICE } from './device.js';
 import { t } from './i18n.js';
+import { PictureDetail } from './picture-detail.js';
 
 // The frame reaches this share of the outline's size beyond it on every side, so that the outline
 // closes inside the grid (terrain-mesh.js) and the picture has ground to blur at its edge.
@@ -116,7 +117,8 @@ export class PlaceCapture {
   // heightsId / pictureId: which of the world's sources (worlds.js); the first by default.
   // picturePx: the picture's points along its longer side. turnable: the frame holds the outline
   // turned any way (a square about the farthest point of it), as a place of two places needs.
-  async capture({ world: worldId, center, outline, heightsId = null, pictureId = null, picturePx = PICTURE_PX, turnable = false, signal = null }) {
+  async capture({ world: worldId, center, outline, heightsId = null, pictureId = null, pictureSource: suppliedPicture = null,
+    picturePx = PICTURE_PX, pictureMostPx = DEVICE.canvasMostPx, turnable = false, signal = null }) {
     const world = worldOf(worldId);
     if (Math.abs(center.lat) > 84) throw new CaptureError('Places this close to a pole cannot be captured yet.');
     const frame = frameFor(turnable ? new CircleOutline(outline.reachM) : outline);
@@ -125,15 +127,16 @@ export class PlaceCapture {
     if (box.west < -180 || box.east > 180) throw new CaptureError('The place crosses the 180th meridian: move it a little east or west.');
     const side = Math.max(frame.widthM, frame.heightM);
     const heightsSource = world.heights.find((s) => s.id === heightsId) ?? world.heights[0];
-    const pictureSource = pictureSourceFor(world, pictureId, side);
+    if (pictureId === 'custom' && !suppliedPicture) throw new CaptureError('Set the custom picture URL before capturing.');
+    const pictureSource = suppliedPicture ?? pictureSourceFor(world, pictureId, side);
 
     this._progress('Heights');
     const heights = await this._heights(world, heightsSource, local, frame, box, side, signal);
     this._progress('Picture');
-    const picture = await this._picture(world, pictureSource, local, frame, box, side, picturePx, signal);
+    const picture = await this._picture(world, pictureSource, local, frame, box, side, picturePx, signal, pictureMostPx);
     return new Place({
       world: world.id, center: { lat: center.lat, lon: center.lon }, frame, outline, heights, picture,
-      sources: { heights: heights.sourceName ?? heightsSource.label, picture: pictureSource.label },
+      sources: { heights: heights.sourceName ?? heightsSource.label, picture: pictureSource.label, ...(pictureSource.metadata ?? {}) },
     });
   }
 
@@ -194,22 +197,39 @@ export class PlaceCapture {
 
   // ---------- picture ----------
 
-  async _picture(world, source, local, frame, box, side, picturePx, signal) {
-    const width = frame.widthM >= frame.heightM ? picturePx : Math.round(picturePx * frame.widthM / frame.heightM);
-    const height = frame.widthM >= frame.heightM ? Math.round(picturePx * frame.heightM / frame.widthM) : picturePx;
-    const out = this._canvas(width, height);
-    const ctx = out.getContext('2d');
-    ctx.fillStyle = '#6b6b6b';
-    ctx.fillRect(0, 0, width, height);
+  // A new picture over the captured place's exact frame. It needs no new heights, selection or
+  // coordinates: using its saved frame also keeps the larger margin of a turnable split place.
+  async pictureFor(place, source, { signal = null } = {}) {
+    const world = worldOf(place.world);
+    const local = new LocalFrame(place.center.lat, place.center.lon, mPerDegOf(world));
+    const frame = place.frame;
+    const box = local.boxOf(frame.widthM / 2, frame.heightM / 2);
+    const picturePx = Math.min(Math.max(place.picture.width, place.picture.height), DEVICE.canvasMostPx);
+    return this._picture(world, source, local, frame, box, Math.max(frame.widthM, frame.heightM), picturePx, signal);
+  }
+
+  async _picture(world, source, local, frame, box, side, picturePx, signal, pictureMostPx = DEVICE.canvasMostPx) {
+    const automatic = picturePx === 'auto';
+    if (source.describe) await source.describe(this._fetch, signal);
+    if (automatic) picturePx = Math.min(8192, pictureMostPx);
     let from;            // { image, at(lat, lon) -> source pixel }
     if (source.tiles) {
       const lat = (box.south + box.north) / 2;
       let z = zoomFor(world.grid, lat, side / picturePx, source.maxZoom, sideTiles(world.grid, box), mPerDegOf(world), tileBudget(picturePx));
       const tilePx = source.tilePx ?? 256;
       z = Math.max(z, source.minZoom ?? 0, Math.log2(tilePx / 256));
-      const stitched = await this._stitch(world.grid, source.tiles, box, z, signal, tilePx);
+      if (source.availableZoom) {
+        z = source.availableZoom(z);
+        if (z === null || sideTiles(world.grid, box)(z) ** 2 > tileBudget(picturePx)) {
+          throw new CaptureError('This source cannot cover the selected area at this detail. Choose a smaller area or another source.');
+        }
+      }
+      if (source.probeZoom) z = await this._availableZoom(source, box, z, signal);
+      if (automatic) picturePx = PictureDetail.pixels(side, source.nativeM ?? PictureDetail.metres(world, lat, z), pictureMostPx);
+      const stitched = await this._stitch(world.grid, source.tiles, box, z, signal, tilePx, source.tileUrl?.bind(source));
       from = { image: stitched.canvas, at: (la, lo) => stitched.at(la, lo) };
     } else {
+      if (automatic) picturePx = PictureDetail.pixels(side, source.nativeM ?? null, Math.min(pictureMostPx, SERVER_IMAGE_PX));
       const lonSpan = box.east - box.west, latSpan = box.north - box.south;
       const most = Math.min(picturePx, SERVER_IMAGE_PX);
       const scale = Math.min(most / lonSpan, most / latSpan);
@@ -223,6 +243,12 @@ export class PlaceCapture {
       const image = await this._decode(await response.blob());
       from = { image, at: (la, lo) => ({ x: (lo - box.west) / lonSpan * w, y: (box.north - la) / latSpan * h }) };
     }
+    const width = frame.widthM >= frame.heightM ? picturePx : Math.max(1, Math.round(picturePx * frame.widthM / frame.heightM));
+    const height = frame.widthM >= frame.heightM ? Math.max(1, Math.round(picturePx * frame.heightM / frame.widthM)) : picturePx;
+    const out = this._canvas(width, height);
+    const ctx = out.getContext('2d');
+    ctx.fillStyle = '#6b6b6b';
+    ctx.fillRect(0, 0, width, height);
     // Row by row: along a row the latitude is one, and the source's x runs straight with the
     // longitude, so each row is one strip of the source scaled into place.
     for (let row = 0; row < height; row++) {
@@ -242,10 +268,23 @@ export class PlaceCapture {
 
   // ---------- tiles ----------
 
+  // Without a service description, test only the chosen location's centre, lowering the level
+  // on a 404. Network/CORS/server failures are errors, not evidence that the detail is too fine.
+  async _availableZoom(source, box, wanted, signal) {
+    for (let z = wanted; z >= 0; z--) {
+      const p = Mercator.px((box.south + box.north) / 2, (box.west + box.east) / 2, z);
+      const answer = await this._tile(source.tileUrl(z, Math.floor(p.x / 256), Math.floor(p.y / 256)), signal, true);
+      if (answer.status === 404) continue;
+      if (answer.ok && await this._tilePicture(await answer.blob())) return z;
+      throw new CaptureError('The custom layer could not load tiles. Check its URL, coverage and CORS support.');
+    }
+    throw new CaptureError('The map has no tiles here at this size.');
+  }
+
   // The tiles of `layer` over the box at zoom z, drawn into one canvas. z is the zoom of 256-point
   // tiles; a layer of bigger tiles (tilePx 512: CTX) is asked for the level as fine as that, one
   // below for 512.
-  async _stitch(grid, layer, box, z, signal, tilePx = 256) {
+  async _stitch(grid, layer, box, z, signal, tilePx = 256, tileUrl = null) {
     const project = projections[grid];
     const level = z - Math.log2(tilePx / 256);
     const nw = project(box.north, box.west, z), se = project(box.south, box.east, z);
@@ -261,10 +300,12 @@ export class PlaceCapture {
       for (let tx = x0; tx <= x1; tx++) {
         jobs.push(async () => {
           if (signal?.aborted) throw new DOMException('Stopped', 'AbortError');
-          const response = await this._tile(`/api/tile/${layer}/${level}/${tx}/${ty}`, signal);
+          const response = await this._tile(tileUrl ? tileUrl(level, tx, ty) : `/api/tile/${layer}/${level}/${tx}/${ty}`, signal, Boolean(tileUrl));
           const image = response.ok ? await this._tilePicture(await response.blob()) : null;
           if (image) {
             ctx.drawImage(image, (tx - x0) * tilePx, (ty - y0) * tilePx, tilePx, tilePx);
+          } else if (tileUrl) {
+            throw new CaptureError('The custom layer could not load tiles. Check its URL, coverage and CORS support.');
           } else if (response.ok || response.status === 404) {
             // no such tile, or one no decoder reads: its place stays grey
             missing += 1;
@@ -305,11 +346,11 @@ export class PlaceCapture {
 
   // A tile's answer. A failed one is asked again after each pause; the last answer is given as it
   // is, and no answer at all as { ok: false, status: 0 }.
-  async _tile(url, signal) {
+  async _tile(url, signal, external = false) {
     let answer = null;
     for (const pause of [...TILE_REPEATS_MS, null]) {
       try {
-        answer = await this._fetch(url, { signal });
+        answer = await this._fetch(url, { signal, ...(external ? { mode: 'cors', credentials: 'omit' } : {}) });
         if (!(answer.status >= 500 || answer.status === 429)) return answer;
       } catch (e) {
         if (e.name === 'AbortError') throw e;

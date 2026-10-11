@@ -23,7 +23,7 @@ const GAP = 12;                // px between a panel and the free area
 // more as the map's limit (it takes one off it).
 const RETINA = typeof window !== 'undefined' && (window.devicePixelRatio || 1) > 1.4;
 function sharp(maxZoom, maxNativeZoom) {
-  return RETINA
+  return RETINA && maxNativeZoom > 0
     ? { detectRetina: true, maxZoom: maxZoom + 1, maxNativeZoom: maxNativeZoom - 1 }
     : { maxZoom, maxNativeZoom };
 }
@@ -32,16 +32,14 @@ export class MapView {
   // element: the map's box. frame: the circle's element; sizeLabel: the width written on it.
   // shape: the <svg> a model of two places is drawn on (shape-overlay.js).
   // panels(): the panels beside the map: their boxes are taken out of the free area, and the circle
-  // is sized and placed in what is left. bars(): bars over the map (the guide's): the circle keeps
-  // clear of them, but keeps its size — a bar that comes and goes must not change the place framed.
+  // is sized and placed in what is left. The guide is an overlay: it does not move the map or frame.
   // onMove(): the map moved or zoomed (the frame's width changed).
-  constructor({ element, frame, sizeLabel, shape, panels = () => [], bars = () => [], onMove = () => {} }) {
+  constructor({ element, frame, sizeLabel, shape, panels = () => [], onMove = () => {} }) {
     this._element = element;
     this._frame = frame;
     this._overlay = new ShapeOverlay(shape);
     this._sizeLabel = sizeLabel;
     this._panels = panels;
-    this._bars = bars;
     this._freeKey = null;       // the free area at the last refresh, to see it change
     this._kept = null;          // the circle's centre on the ground at the last refresh: { lat, lon }
     this._onMove = onMove;
@@ -173,11 +171,22 @@ export class MapView {
   get overlay() { return this._overlay.spec; }
 
   // The free part of the map, in its own pixels: { left, top, right, bottom }: where the circle's
-  // centre stands. Each panel and bar takes away the side of the free part it stands on: of the
-  // parts left of it, right of it, above and below it, the biggest stays free (the guide's bar at
-  // the bottom takes the bottom, not the right).
+  // centre stands. Only the map panel reserves space. The guide floats over this area.
   freeArea() {
-    return this._partFree([...this._panels(), ...this._bars()]);
+    return this._partFree(this._panels());
+  }
+
+  // Keep the selected ground still while its picture and heights sources are chosen.
+  lock(on) {
+    if (!this._map) return;
+    const handlers = ['dragging', 'touchZoom', 'scrollWheelZoom', 'doubleClickZoom', 'boxZoom', 'keyboard'];
+    if (on && !this._interaction) {
+      this._interaction = handlers.filter((name) => this._map[name]?.enabled());
+      for (const name of this._interaction) this._map[name].disable();
+    } else if (!on && this._interaction) {
+      for (const name of this._interaction) this._map[name].enable();
+      this._interaction = null;
+    }
   }
 
   // The part the circle is sized by: the map without the panels, the bars left on it.

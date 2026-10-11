@@ -162,19 +162,7 @@
           </div>
           <p class="hint" id="contour-size"></p>
         </div>
-        <div class="sources" id="sources">
-          <label>Heights <select id="heights-source"></select></label>
-          <label>Picture <select id="picture-source"></select></label>
-        </div>
-        <label class="picture-px">Picture detail
-          <select id="picture-px">
-            <option value="2048">Normal: 2048 points across</option>
-            <option value="4096">High: 4096 points across</option>
-            <option value="8192">Highest: 8192 points across</option>
-          </select>
-        </label>
-        <p class="hint" id="picture-res"></p>
-        <div class="row capture-row" id="capture-row">
+        <div class="row capture-row" id="capture-row" hidden>
           <button type="button" class="btn primary" id="capture-btn">Capture this place</button>
         </div>
       </div>
@@ -240,7 +228,7 @@
             </div>
           </details>
         </div>
-        <p class="hint fly-hint" id="fly-hint" hidden>Drag to look. W and S fly forward and back, A and D turn, Q and E slide, Shift goes up and Ctrl down, R and F tilt the view and Space levels it. Two short quick taps of a key hold its move on; one more press lets it go. + and − change the speed, Alt held is slower, the wheel glides. On a phone: one finger looks, two fingers pinch and slide.</p>
+        <p class="hint fly-hint" id="fly-hint" hidden>Drag to look. W and S fly forward and back, A and D turn, Q and E slide, Shift goes up and Ctrl down, R and F tilt the view and Space levels it. Two short quick taps of a key hold its move on; one more press, or a press of the opposite key, lets it go. + and − change the speed, Alt held is slower, the wheel glides. On a phone: one finger looks, two fingers pinch and slide.</p>
       </div>
       <div class="model-caption" id="model-caption"></div>
       <aside class="panel glass" id="panel">
@@ -293,6 +281,25 @@
             </select>
           </label>
           <div id="style-options"></div>
+          <details class="custom-layer" id="custom-layer" hidden>
+            <summary>Custom picture source</summary>
+            <form id="custom-layer-form">
+              <label id="custom-layer-place-label" hidden>Place <select id="custom-layer-place"></select></label>
+              <label>XYZ tile URL <input id="custom-layer-url" type="text" required maxlength="4096" spellcheck="false" autocomplete="off" placeholder="HTTPS address with {z}, {x} and {y}"></label>
+              <div class="source-history glass" id="custom-layer-history" role="listbox" aria-label="Previously used sources" hidden></div>
+              <p class="hint">Coordinates come from the place you chose on the 2D map. Leave {z}, {x} and {y} in the URL.</p>
+              <details class="source-advanced">
+                <summary>Additional settings</summary>
+                <label>Last tile zoom <input id="custom-layer-zoom" type="number" min="0" max="22" step="1" placeholder="Automatic"></label>
+                <label>Layer name <input id="custom-layer-name" type="text" maxlength="120" autocomplete="off" placeholder="Automatic"></label>
+                <label>Source credit <input id="custom-layer-credit" type="text" maxlength="600" autocomplete="off" placeholder="Automatic"></label>
+                <p class="hint">XYZ tiles, 256 pixels, Web Mercator. The service must allow cross-origin requests (CORS).</p>
+              </details>
+              <p class="hint">Used URLs are saved on the server for every device. The model keeps the picture and its source credit.</p>
+              <p class="hint" id="custom-layer-state" role="status"></p>
+              <div class="row"><button class="btn small" type="submit" id="custom-layer-apply">Apply to the model</button><button class="btn small" type="button" id="custom-layer-remove">Forget URL</button></div>
+            </form>
+          </details>
         </details>
         <details class="fold" id="water-fold">
           <summary>Water</summary>
@@ -319,6 +326,39 @@
     <div class="guide-bar glass" id="guide-bar" hidden>
         <div class="guide-head"><span class="chip accent" id="guide-step"></span><strong id="guide-title"></strong></div>
         <p id="guide-text"></p>
+        <div class="sources" id="sources" hidden>
+          <div id="guide-picture-choice" hidden>
+            <label>Which picture should the model use? <select id="picture-source"></select></label>
+            <div class="custom-source-fields" id="guide-custom-source" hidden>
+              <label>XYZ tile URL <input id="guide-custom-url" type="text" maxlength="4096" spellcheck="false" autocomplete="off" placeholder="HTTPS address with {z}, {x} and {y}"></label>
+              <div class="source-history glass" id="guide-custom-history" role="listbox" aria-label="Previously used sources" hidden></div>
+              <p class="hint">The area, source information and picture detail are filled automatically.</p>
+              <p class="hint" id="guide-source-error" role="status"></p>
+            </div>
+            <details class="source-advanced" id="guide-picture-advanced">
+              <summary>Additional settings</summary>
+              <div class="custom-source-fields" id="guide-custom-settings" hidden>
+                <label>Last tile zoom <input id="guide-custom-zoom" type="number" min="0" max="22" step="1" placeholder="Automatic"></label>
+                <label>Layer name <input id="guide-custom-name" type="text" maxlength="120" autocomplete="off" placeholder="Automatic"></label>
+                <label>Source credit <input id="guide-custom-credit" type="text" maxlength="600" autocomplete="off" placeholder="Automatic"></label>
+                <p class="hint">Coordinates come from the place you chose on the 2D map. Leave {z}, {x} and {y} in the URL.</p>
+                <p class="hint">XYZ tiles, 256 pixels, Web Mercator. The service must allow cross-origin requests (CORS).</p>
+              </div>
+              <label class="picture-px">Picture detail
+              <select id="picture-px">
+                <option value="auto">Automatic: source and device</option>
+                <option value="2048">Normal: 2048 points across</option>
+                <option value="4096">High: 4096 points across</option>
+                <option value="8192">Highest: 8192 points across</option>
+              </select>
+              </label>
+              <p class="hint" id="picture-res"></p>
+            </details>
+          </div>
+          <div id="guide-height-choice" hidden>
+            <label>Which height source should the model use? <select id="heights-source"></select></label>
+          </div>
+        </div>
         <div class="guide-line" id="guide-line" hidden>
           <div class="seg" id="line-kind" role="group" aria-label="The line between the places">
             <button type="button" data-line-kind="centre" aria-pressed="true" title="A straight line through the middle of the shape">Through the centre</button>

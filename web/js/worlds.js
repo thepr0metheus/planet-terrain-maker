@@ -30,7 +30,7 @@ export const WORLDS = {
       { id: 'aws', label: 'AWS Terrain (no key)', tiles: 'earth-heights', maxZoom: 15 },
       { id: 'copernicus', label: 'Copernicus 30 m: the OpenTopography service, key needed', server: '/api/earth/heights' },
     ],
-    // Each picture is shown on the map too, so that the map looks like the picture the model gets.
+    // Model picture choices. MapScreen keeps Earth's selection map on Sentinel-2 independently.
     pictures: [
       // Past 17 Esri often answers with a grey "no data yet" picture instead of a 404.
       { id: 'photo', label: 'Esri World Imagery', tiles: 'earth-photo', maxZoom: 17, map: { layer: 'earth-photo', maxNativeZoom: 19 } },

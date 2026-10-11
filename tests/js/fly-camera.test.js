@@ -218,6 +218,38 @@ test('W tapped twice quickly flies on by itself at its speed; a tap of W lets it
   assert.deepEqual(told, [['forward'], []]);
 });
 
+test('a press of the opposite key lets a held move go too: S lets W go, D lets A go; other keys do not', () => {
+  const { camera, fly, press, run } = setup();
+  const tap = (code) => { press(code); run(0.05); press(code, false); };
+  const hold = (code) => { tap(code); run(0.1); tap(code); };
+  const pairs = [['KeyW', 'KeyS'], ['KeyS', 'ArrowUp'], ['KeyQ', 'KeyE'], ['KeyE', 'KeyQ'], ['KeyA', 'KeyD'],
+    ['ArrowRight', 'ArrowLeft'], ['KeyR', 'KeyF'], ['KeyF', 'KeyR'], ['ShiftLeft', 'ControlRight'], ['PageDown', 'PageUp']];
+  for (const [on, off] of pairs) {
+    hold(on);
+    assert.equal(fly.holding.length, 1, `${on} tapped twice holds its move on`);
+    run(0.3);
+    tap(off);
+    assert.deepEqual(fly.holding, [], `${off} lets the move of ${on} go`);
+    run(0.5);
+  }
+  run(6);
+  const still = camera.position.clone();
+  run(1);
+  assert.ok(camera.position.distanceTo(still) < 1e-9, 'nothing held: the flight glides to a stop');
+  // the keys of other moves turn and slide while the flight goes on
+  hold('KeyW');
+  tap('KeyA');
+  press('KeyE'); run(0.2); press('KeyE', false);
+  assert.deepEqual(fly.holding, ['forward'], 'A and E do not let W go');
+  // the press that let it go is no tap of its own: the next tap of S is a first one
+  run(0.3);
+  tap('KeyS');
+  assert.deepEqual(fly.holding, []);
+  run(0.1);
+  tap('KeyS');
+  assert.deepEqual(fly.holding, [], 'one more tap after the press that let W go holds nothing');
+});
+
 test('only two short quick taps hold a move on: not a key let go and pressed again to go on moving', () => {
   const { fly, press, run } = setup();
   const told = [];

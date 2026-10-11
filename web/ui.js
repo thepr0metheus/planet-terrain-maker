@@ -2,8 +2,9 @@
 
 /*
  * The small tools the page draws with: a way to make elements without ever parsing text as
- * HTML (Dom), icons drawn in code (Icon), a message with a way back (Toast), the search box (Search)
- * and the light that follows the mouse over a surface (Glow).
+ * HTML (Dom), icons drawn in code (Icon), a message with a way back (Toast), the search box (Search),
+ * the header's two blocks of buttons (HeaderBlocks) and the light that follows the mouse over a
+ * surface (Glow).
  */
 
 class Dom {
@@ -159,6 +160,106 @@ class Search {
   focus() {
     this.input.focus();
     this.input.select();
+  }
+}
+
+class HeaderBlocks {
+  /**
+   * The header's buttons in two blocks — the scheme ui-home-style.md, its part on the header's buttons. The regular ones go
+   * up with the header. The pinned ones — the page's main action, the way out of a mode, the way back to a list, the
+   * search — stay in sight: while the header's row of buttons is on the screen they stand last in it, and once the row
+   * has left the window, a glass strip at the window's top holds them, the page's mark at its left (a press on it
+   * goes back to the top).
+   *
+   *   const blocks = new HeaderBlocks(document.querySelector('header.top'), toolsElement, upTitle);
+   *   blocks.set(regular, pinned);  // nodes, as often as the buttons change
+   *
+   * The words a person reads — the mark's hint, the magnifier's — are the page's: this file holds no language.
+   *
+   * The pinned nodes are moved, not copied: a button keeps what it does and how it looks. While they are in the strip,
+   * a placeholder of their size keeps the header's row as it was, so that nothing under it jumps. A page that makes
+   * no HeaderBlocks keeps its one row as before.
+   */
+  constructor(top, tools, upTitle = 'Back to the top') {
+    this.tools = tools;
+    this.pinned = Dom.el('div', { class: 'tools-pinned' });
+    this.placeholder = Dom.el('span', { class: 'tools-pinned-place', 'aria-hidden': 'true' });
+    this.regular = [];
+    this.mark = Dom.el('button', { type: 'button', class: 'pinbar-mark', title: upTitle, 'aria-label': upTitle },
+      HeaderBlocks.mark(top));
+    this.slot = Dom.el('div', { class: 'pinbar-tools' });
+    this.strip = Dom.el('div', { class: 'pinbar', 'aria-hidden': 'true' },
+      Dom.el('div', { class: 'pinbar-box glass' }, this.mark, this.slot));
+    this.mark.addEventListener('click', () => window.scrollTo({ top: 0, behavior: HeaderBlocks.motion() }));
+    document.body.append(this.strip);
+    this.stuck = false;
+    // the row has left the window when nothing of it is seen and it is above: not when the page is scrolled sideways.
+    // Where nothing can watch it (a page's tests under Node), the row simply stays one row, as before.
+    if (typeof IntersectionObserver === 'function') {
+      new IntersectionObserver(([seen]) => this.stick(!seen.isIntersecting && seen.boundingClientRect.bottom <= 0))
+        .observe(tools);
+    }
+  }
+
+  /** The header's buttons: `regular` go up with it, `pinned` stay in sight. */
+  set(regular, pinned) {
+    this.regular = regular.filter(Boolean);
+    this.pinned.replaceChildren(...pinned.filter(Boolean));
+    this.place();
+  }
+
+  place() {
+    this.tools.replaceChildren(...this.regular, this.stuck ? this.placeholder : this.pinned);
+    if (this.stuck) this.slot.replaceChildren(this.pinned);
+  }
+
+  stick(stuck) {
+    if (stuck === this.stuck) return;
+    if (stuck) {
+      // the placeholder takes the block's room in the row, so that the header keeps its height
+      this.placeholder.style.setProperty('--w', `${this.pinned.offsetWidth}px`);
+      this.placeholder.style.setProperty('--h', `${this.pinned.offsetHeight}px`);
+    }
+    this.stuck = stuck;
+    this.place();
+    if (!stuck) this.slot.replaceChildren();
+    this.strip.classList.toggle('on', stuck);
+    this.strip.setAttribute('aria-hidden', String(!stuck));
+    // a page's own sticky parts stand under the strip: --pinbar-h is its height while it is there, 0 when not
+    document.documentElement.style.setProperty('--pinbar-h', stuck ? `${this.strip.offsetHeight}px` : '0px');
+  }
+
+  /** A magnifier for the pinned block: back to the search box, the cursor in it. Seen only in the strip: under the
+   *  header the box itself is in sight. */
+  static searchTool(search, title = 'Back to the search') {
+    const button = Dom.el('button', { type: 'button', class: 'btn icon to-search', title, 'aria-label': title }, Icon.make('search'));
+    button.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: HeaderBlocks.motion() });
+      search.focus();
+    });
+    return button;
+  }
+
+  /** The page's mark for the strip: a copy of its logo, with ids of its own — two elements of one id would be one. */
+  static mark(top) {
+    const logo = top && top.querySelector ? top.querySelector('.logo') : null;
+    if (!logo) return Icon.make('back');
+    const copy = logo.cloneNode(true);
+    for (const named of copy.querySelectorAll('[id]')) {
+      const id = named.id;
+      named.id = `${id}-pinbar`;
+      for (const user of copy.querySelectorAll('*')) {
+        for (const attribute of ['fill', 'stroke', 'href', 'clip-path', 'mask', 'filter']) {
+          const value = user.getAttribute(attribute);
+          if (value && value.includes(`#${id}`)) user.setAttribute(attribute, value.split(`#${id}`).join(`#${id}-pinbar`));
+        }
+      }
+    }
+    return copy;
+  }
+
+  static motion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
   }
 }
 

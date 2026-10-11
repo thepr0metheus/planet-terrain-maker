@@ -56,6 +56,11 @@ export const Mercator = {
     };
   },
 
+  latLon(x, y, z) {
+    const scale = 256 * 2 ** z;
+    return { lon: x / scale * 360 - 180, lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * y / scale))) / DEG };
+  },
+
   // Ground metres a pixel covers at a latitude.
   metresPerPx(lat, z) {
     return 2 * Math.PI * this.EARTH_RADIUS * Math.cos(lat * DEG) / (256 * 2 ** z);

@@ -9,6 +9,11 @@ function fakeApp({ captureOk = true, saveOk = true, shapeOk = true, lineOk = tru
   return {
     calls,
     begin: () => calls.push(['begin']),
+    pickPlace: () => shapeOk,
+    showSources: () => {},
+    pictureReady: () => true,
+    backToPlace: () => {},
+    backToSources: () => calls.push(['backToSources']),
     showWorld: (id) => calls.push(['showWorld', id]),
     captureFirst: async () => { calls.push(['captureFirst']); return shapeOk && firstOk ? { name: 'Batumi', size: '⌀ 3.20 km' } : null; },
     unpickFirst: () => calls.push(['unpickFirst']),
@@ -31,7 +36,13 @@ function fakeApp({ captureOk = true, saveOk = true, shapeOk = true, lineOk = tru
 
 // The guide begun from the dialog of worlds, up to arranging: earth, then the line, then the Moon.
 async function toArrange(w) {
-  w.start(); w.chooseWorld('earth'); await w.next(); await w.next(); w.chooseWorld('moon'); await w.next();
+  w.start(); w.chooseWorld('earth'); await chooseSourcesAndCapture(w); await w.next(); w.chooseWorld('moon'); await chooseSourcesAndCapture(w);
+}
+
+async function chooseSourcesAndCapture(w) {
+  await w.next();
+  await w.next();
+  await w.next();
 }
 
 test('the guide\'s order: a place framed as any place, then the line, then the second, then arrange and save', async () => {
@@ -47,11 +58,11 @@ test('the guide\'s order: a place framed as any place, then the line, then the s
   assert.deepEqual(app.calls.splice(0), [['begin'], ['showWorld', 'earth']]);
   assert.equal(w.view.kind, 'bar');
   assert.equal(w.view.step, 1);
-  assert.equal(w.view.primary, 'Next: the line', 'no line on the first place: it is drawn next');
-  await w.next();
+  assert.equal(w.view.primary, 'Next: picture');
+  await chooseSourcesAndCapture(w);
   assert.deepEqual(app.calls.splice(0), [['captureFirst'], ['drawLine']], 'the first place captured at once, the line drawn on it');
   assert.equal(w.step, 'line');
-  assert.equal(w.view.step, 2);
+  assert.equal(w.view.step, 4);
   assert.equal(w.view.primary, 'Next: the second place');
   await w.next();
   assert.deepEqual(app.calls.splice(0), [['lineReady']]);
@@ -60,10 +71,10 @@ test('the guide\'s order: a place framed as any place, then the line, then the s
   w.chooseWorld('moon');
   assert.deepEqual(app.calls.splice(0), [['showWorld', 'moon'], ['findSecond']]);
   assert.equal(w.view.title, 'Second place, on the Moon · ⌀ 3.20 km');
-  await w.next();
+  await chooseSourcesAndCapture(w);
   assert.deepEqual(app.calls.splice(0), [['captureSecond'], ['arrange']], 'only the second place is captured now');
   assert.equal(w.view.title, 'Arrange the places');
-  assert.equal(w.view.step, 4);
+  assert.equal(w.view.step, 8);
   assert.equal(w.view.primary, 'Save');
   assert.equal(w.view.cancel, 'Close', 'the model exists now: closing the guide keeps it');
   await w.next();
@@ -73,6 +84,49 @@ test('the guide\'s order: a place framed as any place, then the line, then the s
   assert.ok(views.some((v) => v.busy), 'the waits are shown');
 });
 
+test('one place chooses framing, picture and heights before any capture, then adjusts and saves', async () => {
+  const app = fakeApp(), events = [];
+  app.pickPlace = (origin) => { events.push(['place', origin]); return true; };
+  app.showSources = (stage) => events.push(['sources', stage]);
+  app.pictureReady = () => { events.push(['picture']); return true; };
+  const wizard = new CompareWizard(app);
+  wizard.startAt('earth', 'one');
+  assert.equal(wizard.view.total, 4);
+  await wizard.next();
+  assert.equal(wizard.step, 'picture');
+  assert.deepEqual(app.calls, [['begin']], 'no downloads until both source choices are complete');
+  await wizard.next();
+  assert.equal(wizard.step, 'heights');
+  assert.deepEqual(events, [['place', 'place1'], ['sources', 'picture'], ['picture'], ['sources', 'heights']]);
+  await wizard.next();
+  assert.equal(wizard.step, 'arrange');
+  assert.equal(wizard.view.title, 'Adjust the model');
+  assert.deepEqual(app.calls, [['begin'], ['captureFirst'], ['arrange']]);
+  await wizard.next();
+  assert.equal(wizard.active, false);
+  assert.deepEqual(app.calls.slice(-2), [['save'], ['end']]);
+});
+
+test('an invalid custom picture stays at the picture step and cannot request heights or capture', async () => {
+  const app = fakeApp(); app.pictureReady = () => false;
+  const wizard = new CompareWizard(app);
+  wizard.startAt('earth', 'one');
+  await wizard.next(); await wizard.next();
+  assert.equal(wizard.step, 'picture');
+  assert.deepEqual(app.calls, [['begin']]);
+});
+
+test('one-place back goes from model through heights and picture to the original frame', async () => {
+  const app = fakeApp();
+  const wizard = new CompareWizard(app);
+  wizard.startAt('earth', 'one');
+  await chooseSourcesAndCapture(wizard);
+  wizard.back(); assert.equal(wizard.step, 'heights');
+  wizard.back(); assert.equal(wizard.step, 'picture');
+  wizard.back(); assert.equal(wizard.step, 'place1');
+  assert.equal(wizard.active, true);
+});
+
 test('a shape or a line that is not ready keeps the step on', async () => {
   const unclosed = new CompareWizard(fakeApp({ shapeOk: false }));
   unclosed.startAt('earth');
@@ -80,11 +134,11 @@ test('a shape or a line that is not ready keeps the step on', async () => {
   assert.equal(unclosed.step, 'place1', 'an open contour: still framing');
   const uncaptured = new CompareWizard(fakeApp({ firstOk: false }));
   uncaptured.startAt('earth');
-  await uncaptured.next();
-  assert.equal(uncaptured.step, 'place1', 'the first place\'s capture failed: still framing');
+  await chooseSourcesAndCapture(uncaptured);
+  assert.equal(uncaptured.step, 'heights', 'a failed capture retains the selected sources');
   const lineless = new CompareWizard(fakeApp({ lineOk: false }));
   lineless.startAt('earth');
-  await lineless.next();
+  await chooseSourcesAndCapture(lineless);
   await lineless.next();
   assert.equal(lineless.step, 'line', 'an own line of one point: still drawing');
 });
@@ -94,17 +148,21 @@ test('back goes a step at a time: the line, the first place, the dialog', async 
   const w = new CompareWizard(app);
   w.start();
   w.chooseWorld('mars');
-  await w.next();
+  await chooseSourcesAndCapture(w);
   app.calls.length = 0;
   w.back();
-  assert.deepEqual(app.calls, [['unpickFirst']], 'from the line back to framing the first place');
+  assert.deepEqual(app.calls, [['backToSources']]);
+  assert.equal(w.step, 'heights');
+  w.back();
+  assert.equal(w.step, 'picture');
+  w.back();
   assert.equal(w.step, 'place1');
   w.back();
   assert.equal(w.step, 'world1');
   w.back();
   assert.equal(w.step, 'world1', 'nothing before the first step');
   w.chooseWorld('earth');
-  await w.next();
+  await chooseSourcesAndCapture(w);
   await w.next();
   w.chooseWorld('moon');
   w.back();
@@ -122,11 +180,11 @@ test('arranging goes back to the second place; a model the guide did not capture
   assert.equal(w.view.back, 'Back');
   app.calls.length = 0;
   w.back();
-  assert.deepEqual(app.calls, [['backToSecond']]);
-  assert.equal(w.step, 'place2');
+  assert.deepEqual(app.calls, [['backToSources']]);
+  assert.equal(w.step, 'heights');
   const lone = new CompareWizard(fakeApp());
   lone.replace(0);
-  await lone.next();
+  await chooseSourcesAndCapture(lone);
   assert.equal(lone.step, 'arrange');
   assert.equal(lone.view.back, null);
   lone.back();
@@ -135,9 +193,9 @@ test('arranging goes back to the second place; a model the guide did not capture
 
 test('a failed capture or a refused save keeps the step on', async () => {
   const failing = new CompareWizard(fakeApp({ captureOk: false }));
-  failing.start(); failing.chooseWorld('earth'); await failing.next(); await failing.next(); failing.chooseWorld('earth');
-  await failing.next();
-  assert.equal(failing.step, 'place2');
+  failing.start(); failing.chooseWorld('earth'); await chooseSourcesAndCapture(failing); await failing.next(); failing.chooseWorld('earth');
+  await chooseSourcesAndCapture(failing);
+  assert.equal(failing.step, 'heights');
   const app = fakeApp({ saveOk: false });
   const unsaved = new CompareWizard(app);
   await toArrange(unsaved);
@@ -166,11 +224,12 @@ test('while something is under way, the buttons do nothing', async () => {
   const app = fakeApp();
   app.captureSecond = () => new Promise((resolve) => { release = resolve; });
   const w = new CompareWizard(app);
-  w.start(); w.chooseWorld('earth'); await w.next(); await w.next(); w.chooseWorld('earth');
+  w.start(); w.chooseWorld('earth'); await chooseSourcesAndCapture(w); await w.next(); w.chooseWorld('earth');
+  await w.next(); await w.next();
   const capturing = w.next();
   assert.equal(w.view.busy, true);
   w.back(); w.cancel(); await w.next();
-  assert.equal(w.step, 'place2');
+  assert.equal(w.step, 'heights');
   release(true);
   await capturing;
   assert.equal(w.step, 'arrange');
@@ -189,13 +248,14 @@ test('leaving the guide\'s view ends it, but not its own moves', async () => {
   w.chooseWorld('earth');
   w.viewChanged('map');
   assert.equal(w.step, 'place1', 'the map is where places are found');
-  await w.next();
+  await chooseSourcesAndCapture(w);
   w.viewChanged('model');
   assert.equal(w.step, 'line', 'the line is drawn on the first place\'s model');
   await w.next(); w.chooseWorld('moon');
+  await w.next(); await w.next();
   const capturing = w.next();
   w.viewChanged('model');
-  assert.equal(w.step, 'place2', 'the capture opens the model itself');
+  assert.equal(w.step, 'heights', 'the capture opens the model itself');
   release(true);
   await capturing;
   w.viewChanged('model');
@@ -224,11 +284,11 @@ test('one part takes another place from arranging, and the places are arranged a
   assert.equal(w.view.title, 'Another place instead of Collins (Moon)');
   assert.match(w.view.text, /⌀ 3.20 km/);
   assert.equal(w.view.worlds, true, 'the new place may be on another world');
-  assert.equal(w.view.primary, 'Capture this place');
+  assert.equal(w.view.primary, 'Next: picture');
   w.chooseWorld('mars');
   assert.deepEqual(app.calls.at(-1), ['showWorld', 'mars']);
   assert.equal(w.step, 'replace');
-  await w.next();
+  await chooseSourcesAndCapture(w);
   assert.deepEqual(app.calls.slice(-2), [['captureReplacement', 1], ['arrange']]);
   assert.equal(w.step, 'arrange');
 });
@@ -279,10 +339,10 @@ test('a failed capture of the new place keeps it on; another model closes the gu
   const app = fakeApp({ captureOk: false });
   const w = new CompareWizard(app);
   w.replace(1);
-  await w.next();
-  assert.equal(w.step, 'replace');
+  await chooseSourcesAndCapture(w);
+  assert.equal(w.step, 'heights');
   w.viewChanged('map');
-  assert.equal(w.step, 'replace', 'the new place is found on the map');
+  assert.equal(w.step, 'heights', 'the new place is configured on the map');
   w.close();
   assert.equal(w.active, false);
   assert.deepEqual(app.calls.at(-1), ['end']);
@@ -314,19 +374,23 @@ test('back from the line, from the second world and from arranging changes the v
   const app = fakeApp();
   let w = null;
   // the page's views, as App.show tells the guide of each (viewChanged)
-  app.unpickFirst = () => { app.calls.push(['unpickFirst']); w.viewChanged('map'); };
+  app.backToSources = () => { app.calls.push(['backToSources']); w.viewChanged('map'); };
   app.backToLine = () => { app.calls.push(['backToLine']); w.viewChanged('model'); };
   app.backToSecond = () => { app.calls.push(['backToSecond']); w.viewChanged('map'); };
   w = new CompareWizard(app);
   await toArrange(w);
   w.back();
-  assert.equal(w.step, 'place2', 'from arranging back to the second place on the map');
+  assert.equal(w.step, 'heights', 'from arranging back to the second place sources');
+  w.back();
+  w.back();
+  assert.equal(w.step, 'place2');
   w.back();
   w.back();
   assert.equal(w.step, 'line', 'and to the line on the first place\'s model');
   w.back();
+  assert.equal(w.step, 'heights');
+  w.back(); w.back();
   assert.equal(w.step, 'place1', 'and to framing the first place');
   assert.equal(w.active, true);
   assert.ok(!app.calls.some(([name]) => name === 'end'), 'never ended on the way');
 });
-

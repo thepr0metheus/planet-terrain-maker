@@ -1,0 +1,16 @@
+[
+  {"valid": true, "source": {"url": "https://tiles.example.org/{z}/{x}/{y}.png"}},
+  {"valid": true, "source": {"url": " https://tiles.example.org/{z}/{x}/{y}.png ", "name": " Example ", "credit": " Agency ", "maxZoom": 16}},
+  {"valid": true, "source": {"url": "https://tiles.example.org/tiles?z={z}&x={x}&y={y}", "maxZoom": "auto"}},
+  {"valid": true, "source": {"url": "https://tiles.example.org/{z}/{x}/{y}.png", "maxZoom": "0"}},
+  {"valid": false, "source": {"url": "http://tiles.example.org/{z}/{x}/{y}.png"}},
+  {"valid": false, "source": {"url": "https://login:password@tiles.example.org/{z}/{x}/{y}.png"}},
+  {"valid": false, "source": {"url": "https://tiles.example.org/{z}/{x}/y.png"}},
+  {"valid": false, "source": {"url": "https://tiles.example.org/{z}/{x}/{y}/{unknown}.png"}},
+  {"valid": false, "source": {"url": "https://{x}.example.org/{z}/{x}/{y}.png"}},
+  {"valid": false, "source": {"url": "https://tiles.example.org/{z}/{x}/{y}.png#fragment"}},
+  {"valid": false, "source": {"url": "https://tiles.example.org/{z}/{x}/{y}.png", "maxZoom": 23}},
+  {"valid": false, "source": {"url": "https://tiles.example.org/{z}/{x}/{y}.png", "maxZoom": -1}},
+  {"valid": false, "source": {"url": "https://tiles.example.org/{z}/{x}/{y}.png", "maxZoom": 2.5}},
+  {"valid": false, "source": {"url": "https://tiles.example.org/{z}/{x}/{y}.png", "maxZoom": false}}
+]

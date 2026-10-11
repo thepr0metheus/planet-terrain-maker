@@ -28,6 +28,8 @@ from .packages import InstalledPackages
 from .pictures import PictureSizes
 from .places import Nominatim
 from .settings import Refused as SettingRefused, Settings
+from .picture_sources import InvalidSource, PictureSources, SourceStoreError
+from .detail_tiles import DetailTiles, InvalidDetail
 from .planets import PLANETS, NoHeights, RegionError
 from .tiles import SOURCES, TileMissing, TileRelay
 
@@ -39,9 +41,10 @@ MAX_CELLS = 1024                 # a heights grid a side, at most
 MAX_IMAGE = 4096                 # a planet picture a side, at most
 TILE_CACHE_BYTES = int(os.environ.get("TILE_CACHE_MB", "4096")) * 1024 * 1024
 
-# The page loads nothing from other sites: tiles, heights and names come through this server.
+# Built-in sources come through this server. The 3D model's custom picture tiles are read directly
+# over HTTPS, with CORS, so their URL never becomes a server-side fetch target.
 # connect-src blob: lets the page read what it made itself: GLTFLoader reads a model's pictures from blobs
-CSP = ("default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' blob:; "
+CSP = ("default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' https: blob:; "
        "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 
 SOUTH = Param("south", "number", "South edge of the region, degrees.", True)
@@ -197,6 +200,8 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
     overpass = Overpass(fetcher, data_dir / "cache" / "buildings", log=log)
     library = Library(data_dir / "models", data_dir / "trash")
     settings_store = Settings(data_dir / "settings.json")
+    picture_sources = PictureSources(data_dir / "picture-sources.json")
+    detail_tiles = DetailTiles(data_dir / "picture-tiles")
     client_errors = ClientErrors(data_dir / "client-errors.jsonl")
     pictures = PictureSizes(data_dir / "cache" / "pictures", log=log)
     asteroids = AsteroidShapes(fetcher, data_dir / "cache" / "asteroids", WEB / "data" / "asteroids-top.json", log=log)
@@ -433,6 +438,74 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
             return _error(502, str(e))
 
     # ---------- settings ----------
+
+    @app.get("/api/picture-sources/<key>/tiles/<int:z>/<int:x>/<int:y>")
+    @api(responses={200: "A persisted detailed PNG/JPEG tile.", 400: "Invalid tile address.", 404: "Not downloaded yet.", 503: "Data could not be read."})
+    def detail_tile_get(key, z, x, y):
+        """A detailed tile that a browser has already downloaded and saved."""
+        try:
+            path = detail_tiles.path(key, z, x, y)
+            if not path.exists():
+                return _error(404, "Detail tile not downloaded yet.")
+            body = path.read_bytes()
+            return Response(body, mimetype=detail_tiles.content_type(body), headers={"Cache-Control": "private, max-age=86400"})
+        except InvalidDetail as error:
+            return _error(400, str(error))
+        except OSError:
+            return _error(503, "The detail tile could not be read.")
+
+    @app.put("/api/picture-sources/<key>/tiles/<int:z>/<int:x>/<int:y>")
+    @api(body="A 256 by 256 PNG/JPEG tile, at most 1 MiB, as raw bytes.",
+         responses={204: "Saved in mounted data.", 400: "Invalid tile address or image.", 404: "Unknown source key.", 503: "Data could not be written."})
+    def detail_tile_put(key, z, x, y):
+        """Persist a browser-fetched tile without making an upstream request."""
+        try:
+            if not any(source["key"] == key for source in picture_sources.list()):
+                return _error(404, "Unknown picture source.")
+            if request.content_length is not None and request.content_length > DetailTiles.MOST_BYTES:
+                raise InvalidDetail("The detail tile is too large.")
+            detail_tiles.keep(key, z, x, y, request.stream.read(DetailTiles.MOST_BYTES + 1))
+            return Response(status=204)
+        except InvalidDetail as error:
+            return _error(400, str(error))
+        except (SourceStoreError, OSError):
+            return _error(503, "The detail tile could not be saved.")
+
+    @app.get("/api/picture-sources")
+    @api(responses={200: "Saved user-entered sources, newest first: [{key, url, name, credit, maxZoom}].", 503: "The data file could not be read."})
+    def picture_sources_list():
+        """List user-entered sources shared by devices, from the mounted data directory."""
+        try:
+            response = jsonify(picture_sources.list())
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        except SourceStoreError as error:
+            return _error(503, str(error))
+
+    @app.post("/api/picture-sources")
+    @api(body="{url, name, credit, maxZoom} as JSON. maxZoom is null for automatic detail.",
+         responses={200: "The updated source list, newest first; the same URL is stored once.", 400: "Invalid source.", 503: "The data file could not be read or written."})
+    def picture_sources_keep():
+        """Remember a source as runtime data only; no upstream request is made."""
+        try:
+            return jsonify(picture_sources.keep(request.get_json(silent=True)))
+        except InvalidSource as error:
+            return _error(400, str(error))
+        except SourceStoreError as error:
+            return _error(503, str(error))
+
+    @app.delete("/api/picture-sources")
+    @api(body="{url} as JSON. Only this saved source is forgotten.",
+         responses={200: "The remaining source list.", 400: "Invalid URL.", 503: "The data file could not be read or written."})
+    def picture_sources_forget():
+        """Forget a saved URL without changing any model's captured picture."""
+        data = request.get_json(silent=True)
+        try:
+            return jsonify(picture_sources.forget(data.get("url") if isinstance(data, dict) else None))
+        except InvalidSource as error:
+            return _error(400, str(error))
+        except SourceStoreError as error:
+            return _error(503, str(error))
 
     @app.get("/api/settings")
     @api(responses={200: '{opentopo_key: "page" | "environment" | null, starts: {world: {lat, lon, zoom}}, '

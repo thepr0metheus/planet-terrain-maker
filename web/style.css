@@ -188,6 +188,7 @@ body { overflow: hidden; }
 .app[data-screen="model"] .guide-bar { left: calc(50% - 172px); width: min(560px, calc(100% - 380px)); }
 .guide-head { display: flex; align-items: center; gap: 10px; }
 .guide-bar p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+.guide-bar { max-height: calc(100% - 24px); overflow-y: auto; }
 .guide-bar .row { justify-content: flex-end; }
 
 .busy {
@@ -218,15 +219,38 @@ body { overflow: hidden; }
 .panel .seg { margin: 6px 0; }
 .panel .seg button { height: auto; min-height: 32px; padding: 6px; white-space: normal; line-height: 1.2; }
 .panel-note { margin-top: 10px; }
+.custom-layer form { display: grid; gap: 8px; padding-bottom: 12px; }
+.custom-layer form > label:not(.check) { display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.source-advanced { font-size: 13px; color: var(--ink-2); }
+.source-advanced > summary { cursor: pointer; padding: 8px 0; }
+.source-advanced > label { display: grid; gap: 4px; margin: 8px 0; }
+.source-history { position: fixed; z-index: 3000; left: var(--history-left, 8px); top: var(--history-top, 8px);
+  width: var(--history-width, 320px); max-height: min(220px, 35vh); overflow-y: auto; padding: 5px; border-radius: 12px; }
+.source-history .group { margin: 5px 8px; font-size: 12px; color: var(--ink-2); }
+.source-history button { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 9px; border: 0;
+  border-radius: 8px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.source-history button:hover, .source-history button[aria-selected="true"] { background: var(--field); }
+.source-history .name { font-size: 13px; font-weight: 600; }
+.source-history .detail { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ink-2); }
+.custom-layer input, .custom-layer select { min-width: 0; width: 100%; padding: 7px 9px; border: 1px solid var(--stroke-up); border-radius: 9px;
+  background: var(--field); color: var(--ink); font: 13px var(--font); }
+.custom-layer > summary { margin: 12px 0; font-size: 13px; cursor: pointer; }
+.custom-source-fields { display: grid; gap: 8px; margin-top: 8px; }
+.custom-source-fields input { width: 100%; min-width: 0; padding: 7px 9px; background: var(--field); color: var(--ink);
+  border: 1px solid var(--stroke-up); border-radius: 9px; font: 13px var(--font); }
+#guide-picture-choice { display: grid; gap: 10px; }
+.map-screen[data-selection-locked] .leaflet-control-zoom { pointer-events: none; opacity: .5; }
+.custom-layer .row { flex-wrap: wrap; }
 /* How the camera moves, as one slim bar over the model (small and neat,
    with symbols for a part): the two ways to move in words, a thin line, then To the centre, Whole
    model and the panel as symbols, their words in the title. About 320 points wide: one row even
    beside the panel on an iPad held upright. */
 .view-tools {
+  --tools-width: 460px;
   position: absolute; top: 10px; left: 10px; z-index: 18; display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
-  max-width: calc(100% - 370px); padding: 3px; border-radius: 12px;
+  max-width: min(var(--tools-width), calc(100% - 370px)); padding: 3px; border-radius: 12px;
 }
-.model-screen:has(> .panel[hidden]) .view-tools { max-width: calc(100% - 20px); }
+.model-screen:has(> .panel[hidden]) .view-tools { max-width: min(var(--tools-width), calc(100% - 20px)); }
 .view-tools .seg { flex: none; gap: 2px; padding: 0; border: 0; border-radius: 0; background: none; }
 .view-actions { display: flex; flex: none; gap: 2px; margin-left: 2px; padding-left: 4px; border-left: 1px solid var(--stroke); }
 .view-tools .seg button, .view-actions button {
@@ -358,8 +382,8 @@ body { overflow: hidden; }
 
 /* An asteroid put on the model (asteroid-on-model.js): its search under the camera bar, and over it
    its label, which also carries it to another point */
-.asteroid-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-basis: 100%; padding: 4px 6px 2px; }
-.asteroid-tools .place-search { flex: 1 1 260px; max-width: 380px; }
+.asteroid-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; flex-basis: 100%; padding: 4px 6px 2px; }
+.asteroid-tools .place-search { min-width: 0; }
 .asteroid-tools .place-search .search { height: 36px; }
 .asteroid-tools .search-results { max-height: min(55vh, 380px); }
 /* the asteroids on the model: a name chooses it, its cross takes it off */
@@ -373,7 +397,7 @@ body { overflow: hidden; }
 .asteroid-chip button:hover, .asteroid-chip button:focus-visible { color: var(--ink); }
 @media (pointer: coarse) { .asteroid-chip button { height: 36px; } .asteroid-chip .drop { width: 36px; } }
 .asteroid-label.chosen { border-color: #ffd23f; }
-.asteroid-tools .asteroid-height { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; flex: 1 1 200px; max-width: 300px;
+.asteroid-tools .asteroid-height { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px;
   font-size: 12.5px; color: var(--ink-2); }
 .asteroid-tools .asteroid-height input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
 .asteroid-tools .asteroid-height output { font: 600 12px/1.4 var(--mono); color: var(--ink); }
@@ -431,7 +455,7 @@ body { overflow: hidden; }
   .guide-bar, .app[data-screen] .guide-bar { bottom: auto; top: 10px; left: 50%; width: calc(100% - 24px); }
   .panel { top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: 46%; border-radius: 20px 20px 0 0; }
   .model-caption { bottom: calc(46% + 10px); max-width: calc(100% - 32px); }
-  .view-tools { max-width: calc(100% - 24px); }
+  .view-tools { max-width: min(var(--tools-width), calc(100% - 24px)); }
 }
 @media (max-width: 900px) and (min-width: 641px) {
   .tools .btn:not(.primary):not(.accent) .label { display: none; }

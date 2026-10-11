@@ -119,6 +119,7 @@ class App {
       this.mapScreen.setShape('circle');
       this.mapScreen.showWorld('earth');
     }
+    this.compare.startHere('one');
   }
 
   // The screen first: the view measures itself when the model is laid in it. from: where Back goes.

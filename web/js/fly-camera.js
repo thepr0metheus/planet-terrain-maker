@@ -11,7 +11,7 @@
 //                second soon after the first is let go, and the move is held on as the second is let
 //                go: a key let go and pressed again to go on moving holds nothing (it did, and too
 //                often, when only the time between the presses counted). A press of the same key
-//                lets it go
+//                lets it go, and so does a press of the opposite one: S lets W go, D lets A go
 //   speeds       each action has its own, 0.001 to 1 times the full one (the page's sliders): flight
 //                forward and back (also + and −), slide, climb, turn, tilt, and how far the camera
 //                leans into a turn
@@ -54,6 +54,9 @@ const KEYS = {
   slow: ['AltLeft', 'AltRight'],
 };
 const HOLDABLE = Object.keys(KEYS).filter((move) => move !== 'slow');   // Alt only slows: it is not held on
+// The moves that undo each other: a press of one lets the other go when it is held on.
+const OPPOSITES = [['forward', 'back'], ['left', 'right'], ['turnLeft', 'turnRight'], ['tiltUp', 'tiltDown'], ['up', 'down']];
+const OPPOSITE = Object.fromEntries(OPPOSITES.flatMap(([a, b]) => [[a, b], [b, a]]));
 const LEVEL_KEYS = ['Space'];
 const SPEED_KEYS = { Equal: RATE.step, NumpadAdd: RATE.step, Minus: 1 / RATE.step, NumpadSubtract: 1 / RATE.step };
 
@@ -301,10 +304,14 @@ export class FlyCamera {
         // a key down already repeats, whatever the browser says of it
         if (e.repeat || this._keysDown.has(e.code)) continue;
         this._keysDown.set(e.code, this._now());
-        if (this._holding.has(move)) {
-          // a press of a move held on lets it go; it goes on while the key is down, as any press
-          this._holding.delete(move);
-          this._tapped.delete(move);
+        // a press of a move held on, or of its opposite, lets it go; it goes on while the key is down,
+        // as any press
+        const freed = [move, OPPOSITE[move]].filter((one) => this._holding.has(one));
+        if (freed.length) {
+          for (const one of freed) {
+            this._holding.delete(one);
+            this._tapped.delete(one);
+          }
           this._letGo.add(e.code);
           this.onHold(this.holding);
         }

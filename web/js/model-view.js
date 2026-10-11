@@ -129,6 +129,8 @@ export class ModelView {
   }
 
   get canvas() { return this.renderer.domElement; }
+  get running() { return this._running; }
+  get terrainGeometry() { return this._terrain?.geometry; }
 
   // Draw only while the model is on screen. Leaving it ends free flight: its keys are the map's then.
   run(on) {
@@ -296,11 +298,11 @@ export class ModelView {
     const down = Math.atan(tan * Math.max(1, size.y - bottom) / fullH);
     const distance = radius / Math.sin(Math.min(across, down)) * FIT;
     this.camera.position.copy(this.controls.target).addScaledVector(START_SIDE, distance);
-    // the camera comes as close as a twelfth of the model,
-    // and sees from a third of a hundredth, so that the ground that near is not cut
-    this.controls.minDistance = s / 12;
+    // Close-up tile detail needs the camera to reach one hundredth of the model's size.
+    // A still nearer clipping plane keeps that ground visible.
+    this.controls.minDistance = s / 100;
     this._reach();
-    this.camera.near = s / 300;
+    this.camera.near = s / 2000;
     this.controls.update();
   }
 

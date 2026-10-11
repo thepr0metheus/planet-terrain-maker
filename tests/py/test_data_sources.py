@@ -176,7 +176,8 @@ class TileTest(unittest.TestCase):
             locked.chmod(0o700)
 
     def test_trim_takes_the_tiles_served_longest_ago(self):
-        relay = TileRelay(self.root, FakeFetcher({"terrarium": png(b"x" * 100)}), 250)
+        # This checks explicit trim; automatic background trim must not race the assertion.
+        relay = TileRelay(self.root, FakeFetcher({"terrarium": png(b"x" * 100)}), 250, clock=Clock(0))
         layer = SOURCES["earth-heights"]
         for x in range(4):
             relay.get(layer, 5, x, 0)

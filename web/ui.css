@@ -113,6 +113,30 @@ h1 {
 .sub { margin: 5px 0 0; color: var(--ink-2); font-size: 13.5px; }
 .tools { grid-area: 1 / 2; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--stroke); color: var(--ink-3); font-size: 12.5px; }
+
+/* ---------- the header's two blocks (HeaderBlocks in ui.js): the pinned one stays in sight ---------- */
+/* While the header is on the screen, the pinned block stands last in its row of buttons. */
+.tools-pinned { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.tools-pinned-place { display: inline-block; width: var(--w, 0); height: var(--h, 0); }
+/* the magnifier leads back to the search box: in the header's row the box itself is in sight, in the strip it is not */
+.tools > .tools-pinned .to-search { display: none; }
+/* Once the row has left the window, a glass strip as wide as the page's column holds the block at the top. */
+.pinbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 40; padding: 8px clamp(16px, 4vw, 40px) 0;
+  pointer-events: none; opacity: 0; transform: translateY(-120%); visibility: hidden;
+  transition: transform .28s var(--ease), opacity .2s, visibility 0s .28s;
+}
+.pinbar.on { opacity: 1; transform: none; visibility: visible; transition: transform .28s var(--ease), opacity .2s; }
+.pinbar-box {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: calc(1200px - 2 * clamp(16px, 4vw, 40px));
+  margin: 0 auto; padding: 6px 8px 6px 10px; border-radius: 18px; pointer-events: auto;
+}
+.pinbar-mark { display: grid; place-items: center; padding: 0; border: 0; border-radius: 12px; background: none; cursor: pointer; line-height: 0; }
+.pinbar-mark .logo { width: 36px; height: 36px; filter: none; }
+.pinbar-tools { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* a jump to an anchor stops below the strip; --pinbar-h (set by HeaderBlocks) is the strip's height while it is shown */
+:root { --pinbar-space: 76px; --pinbar-h: 0px; }
+:is(h1, h2, h3, h4, h5, h6)[id] { scroll-margin-top: var(--pinbar-space); }
 footer a { color: var(--accent); }
 
 /* ---------- the search: a row of its own under the name and the tools, across the whole width ---------- */
@@ -319,6 +343,9 @@ dialog.tall { width: min(620px, calc(100vw - 28px)); max-height: calc(100vh - 28
   .tools { grid-area: 2 / 1; justify-content: flex-start; }
   .finder ~ .tools { grid-area: 3 / 1; }
   .logo { width: 44px; height: 44px; }
+  /* in the strip only the icons: a button's words stay in its hint and its aria-label */
+  .pinbar .btn .label { display: none; }
+  .pinbar .btn { width: 42px; padding: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

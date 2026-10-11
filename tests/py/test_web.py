@@ -71,6 +71,8 @@ class ServedTest(unittest.TestCase):
         page.close()
         self.assertEqual(page.headers["Content-Security-Policy"], CSP)
         self.assertIn("default-src 'self'", CSP)
+        self.assertIn("img-src 'self' data: blob:", CSP)
+        self.assertIn("connect-src 'self' https: blob:", CSP)
         for name, kind in (("ui.css", "text/css"), ("js/app.js", "text/javascript"), ("vendor/three/three.module.js", "text/javascript"),
                            ("data/moon-names.json", "application/json"), ("favicon.svg", "image/svg+xml")):
             with self.subTest(name=name):

@@ -34,11 +34,11 @@ the same library to every device on your network.
   (Kuwahara), pencil sketch (XDoG) or three tones, drawn on the graphics card (`styles.js`). Water
   below a level is coloured by its depth; with **Calm water** the model's ground is flat there too, for
   printing. Buildings come from OpenStreetMap for places on Earth up to about 10 km across.
-- **Two places side by side.** A guide frames the first place and shows it in 3D at once; on its
-  relief you draw the dividing line, straight through the centre or through points of your own, and
-  a smooth curve follows them. Then the second place is found on the map in the same shape, turned as
-  you like. Afterwards each part can be turned and raised, and the heights stand either each from sea
-  level or with the lowest points level.
+- **Two places side by side.** A guide frames the first place, takes its picture and heights and shows
+  it in 3D; on its relief you draw the dividing line, straight through the centre or through points of
+  your own, and a smooth curve follows them. Then the second place is found on the map in the same
+  shape, turned as you like, with its own picture and heights. Afterwards each part can be turned and
+  raised, and the heights stand either each from sea level or with the lowest points level.
 - **Look around.** Around the model: drag to turn, a click shows the height there and makes that point
   the centre the view turns about. Or **free flight** (`fly-camera.js`), with the weight of a bird or
   a plane: it gathers speed, glides on, leans into turns and lifts its nose in a climb.
@@ -61,6 +61,9 @@ the same library to every device on your network.
 - **A library on the server**: a model saved on a computer opens on a phone. Cards show the model as
   it was on screen when it was saved; a model can be copied and renamed, and a name made of its places'
   names renames the places too.
+- **Your own picture source** on Earth: the tiles of any service that lets a page read them (an HTTPS
+  XYZ address) become the model's picture, at the guide's picture step or later in the model's panel.
+  Coming close to the model in the Photo style loads the service's finer tiles for the part in view.
 - **English and Russian**, light and dark themes, phones and tablets.
 
 | Frame a place on the map… | …and it becomes a solid model |
@@ -103,19 +106,37 @@ or behind a reverse proxy of your own that signs people in.
 
 ## Using it
 
-- **New model** opens the map, where **One place** or **Two places side by side** is chosen. **Make this
-  the start** keeps where a world's map opens, for every device.
+- **New model** opens the map, where **One place** or **Two places side by side** is chosen. A guide
+  leads through the steps: for one place, frame it, choose its picture, choose its heights and build it;
+  for two places, the same for each, with the dividing line drawn between them. The guide floats over
+  the map without moving it, and on Earth the map shows Sentinel-2 cloudless 2025 while a place is
+  framed. **Make this the start** keeps where a world's map opens, for every device.
 - **The camera bar** over the model: **Around the model** and **Free flight**, then **To the centre**,
-  **Whole model**, the **Height ruler** and the panel. Around the model the wheel or two fingers come
-  as close as a twelfth of the model's width, and R and F move the camera up and down.
-- **Free flight**: the mouse looks; W and S fly forward and back, A and D (or the arrows) turn, Q and E
-  slide, Shift climbs and Ctrl descends, R and F tilt the view, Space (or **Level**) brings it back to
-  the horizon. Two short quick taps of a key hold its move on, one more press lets it go. Each action
-  has its own speed slider; **Save as my set** keeps your speeds on the server for every device. On a
-  phone one finger looks and two fingers pinch and slide.
+  **Whole model**, the **Height ruler**, the **Asteroid** button and the panel. Around the model the
+  wheel or two fingers come as close as a twelfth of the model's width, and R and F move the camera up
+  and down.
+- **Free flight**: the mouse looks; W and S (or ↑ and ↓) fly forward and back, A and D (or ← and →)
+  turn, Q and E slide, Shift climbs and Ctrl descends, R and F tilt the view, Space (or **Level**)
+  brings it back to the horizon. Two short quick taps of a key hold its move on; one more press, or a
+  press of the opposite key (S for W, D for A), lets it go. Each action has its own speed slider; **Save
+  as my set** keeps your speeds on the server for every device. On a phone one finger looks and two
+  fingers pinch and slide.
 - **The height ruler**: its ring is its top, carried to another point; its "0" is carried the same way
   to another level. Arrow keys move a focused end; Esc puts the ruler away. The ruler is drawn over the
   view, so no picture, video or file has it.
+- **Your own picture source**: choose **Custom picture source** at the picture step, or **Picture →
+  Custom picture source** in the model's panel, and paste an HTTPS tile address with `{z}`, `{x}` and
+  `{y}`. The tiles must be 256 pixels in Web Mercator, from a service that allows cross-origin requests
+  (CORS). The name, the credit and the deepest zoom come from the service's WMTS description or from a
+  test at the place; **Additional settings** change them. **Apply to the model** replaces the picture
+  without fetching the heights again; on a model of two places on Earth you choose which place gets it.
+  The field offers the addresses used before, kept on the server for every device; **Forget URL** drops
+  the address and keeps the picture. The tiles never show on the 2D map. A saved model keeps its
+  picture and credit, so it opens without the address; the service's terms still apply to the picture.
+- **Close-up detail** of your own picture source, in the Photo style: only the tiles in view are loaded,
+  up to the service's deepest zoom, and the server keeps them (`data/picture-tiles`) for the next visit.
+  PNG, video and GLB carry the detail loaded in view; other styles, OBJ and USDZ use the overview
+  picture, and STL and 3MF are the shape alone.
 - **Tablets** take pictures of at most 4096 points a side: a model of two places holds three pictures
   that big, more than a tablet's graphics memory. A saved picture larger than that comes to the tablet
   as a smaller copy made by the server, and the file itself stays as it was.
@@ -126,8 +147,9 @@ or behind a reverse proxy of your own that signs people in.
 
 ## How it is built
 
-The server (`app/`, Flask) serves the page and relays everything it needs from other services, so
-the page loads nothing from other sites:
+The server (`app/`, Flask) serves the page and relays the built-in data sources. Your own picture
+sources are the exception: the browser reads their tiles itself, over HTTPS with CORS and without
+cookies, and the server never fetches an address a user typed:
 
 | Module | What it does |
 |---|---|
@@ -142,6 +164,8 @@ the page loads nothing from other sites:
 | `library.py` | the saved models in `data/models`; removed ones wait 30 days in `data/trash` |
 | `keys.py` | the OpenTopography key, set on the page and kept in `data/keys` (mode 600), never sent back |
 | `settings.py` | where each world's map opens and your set of flight speeds, the same on every device |
+| `picture_sources.py` | user-entered source history in `data/picture-sources.json`, outside git, shared between devices |
+| `detail_tiles.py` | close-up tiles of your own picture sources, sent by the browser, checked and kept in `data/picture-tiles` |
 | `apispec.py` | `/openapi.json` from the routes, and `docs/http-api.md` from it |
 | `packages.py` | what this copy runs on, for a check of known vulnerabilities (`GET /api/packages`) |
 

@@ -22,6 +22,8 @@ import { linePreview } from './line-preview.js';
 import { LinePoints } from './line-points.js';
 import { DEVICE } from './device.js';
 import { reportError } from './client-errors.js';
+import { CustomPicture } from './custom-picture.js';
+import { DetailedPictures } from './detailed-pictures.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -73,7 +75,11 @@ export class ModelScreen {
     this._timer = null;
     this._painter = new StylePainter();
     this._buildings = new Buildings();
+    this._customPicture = new CustomPicture({
+      onChanged: () => this._build({ picture: true }),
+    });
     this.view = new ModelView($('view'));
+    this._details = new DetailedPictures({ view: this.view, say });
     this.view.onLost = () => this._lost();
     this.view.coverWith($('panel'));
     this._dials = new TurnDials({
@@ -147,6 +153,7 @@ export class ModelScreen {
     this.view.setMode('orbit');
     this.syncCameraButtons();
     this._fillPanel();
+    this._customPicture.show(model);
     this._build({ geometry: true, picture: true, fresh: true });
   }
 
@@ -302,7 +309,7 @@ export class ModelScreen {
   _showHolding(moves) {
     const line = $('fly-holding');
     line.hidden = !moves.length;
-    if (moves.length) line.textContent = t('Held on: {moves}. The same key again lets go.', { moves: moves.map((m) => t(MOVE_WORDS[m])).join(', ') });
+    if (moves.length) line.textContent = t('Held on: {moves}. The same key again, or the opposite one, lets go.', { moves: moves.map((m) => t(MOVE_WORDS[m])).join(', ') });
   }
 
   syncCameraButtons() {
@@ -568,9 +575,11 @@ export class ModelScreen {
     const rename = Dom.el('button', { type: 'button', class: 'caption-edit', title: t('Rename the model and its places'),
       'aria-label': t('Rename the model and its places') }, Icon.make('pencil', 16));
     rename.addEventListener('click', () => this._rename());
+    const credits = [...new Set(m.places.filter((p) => p.sources.customPicture).map((p) => p.sources.pictureCredit))];
     $('model-caption').replaceChildren(
       Dom.el('div', { class: 'title' }, title, rename),
-      Dom.el('div', { class: 'meta' }, [m.name ? names.join(' · ') : '', extent, size, scale].filter(Boolean).join(' · ')));
+      Dom.el('div', { class: 'meta' }, [m.name ? names.join(' · ') : '', extent, size, scale].filter(Boolean).join(' · ')),
+      ...credits.map((credit) => Dom.el('div', { class: 'meta' }, t('Picture source: {source}', { source: credit }))));
   }
 
   // ---------- building ----------
@@ -606,12 +615,14 @@ export class ModelScreen {
         if (m !== this._model) return;
         this.view.show({ mesh: this._mesh, picture: this._picture, buildings: this._buildingsSolid,
           surface: (u, v) => this._surfaceAt(u, v), keepCamera: !fresh });
+        this._details.show(m, this._mesh);
         if (this._ruler.on) this._ruler.measure(this._measured());
         this._asteroids.measure(this._measured());
         if (this._asteroidsToRestore.length) this._restoreAsteroids(this._asteroidsToRestore.splice(0));
         $('size-note').textContent = t('{n} triangles', { n: number(this._mesh.triangles) });
       } else {
         this.view.setPicture(this._picture);
+        this._details.show(m, this._mesh);
       }
       if (m.isSplit) this._dials.show(m.dialAnchors(), m.compare.turns, m.places.map((p) => p.name));
       else this._dials.hide();
@@ -688,6 +699,7 @@ export class ModelScreen {
   showLine(view) {
     const was = this._lineView;
     this._lineView = view;
+    this._details.line(Boolean(view));
     const m = this._model;
     if (!m) return;
     this._linePoints.show(view?.points ?? [], m.frame);
@@ -748,7 +760,9 @@ export class ModelScreen {
         const jpeg = new Uint8Array(await (await toJpeg(this._picture)).arrayBuffer());
         download(new Blob([objZipOf(this._mesh, jpeg, this._buildingsSolid ? [this._buildingsSolid] : [], name)], { type: 'application/zip' }), fileName(name, 'obj.zip'));
       } else if (kind === 'glb') {
-        download(new Blob([await glbOf(exportScene(this._mesh, this._picture, this._buildingsSolid, name))], { type: 'model/gltf-binary' }), fileName(name, 'glb'));
+        const scene = exportScene(this._mesh, this._picture, this._buildingsSolid, name);
+        this._details.addToExport(scene);
+        download(new Blob([await glbOf(scene)], { type: 'model/gltf-binary' }), fileName(name, 'glb'));
       } else if (kind === 'usdz') {
         const nodes = Math.min(USDZ_NODES, DETAIL[m.settings.detail]);
         const mesh = nodes === DETAIL[m.settings.detail] ? this._mesh : this._solid(m.settings.detail, nodes);
