@@ -145,3 +145,25 @@ test('a comet and a spacecraft are saved by their id and said by their size', ()
   assert.deepEqual(asteroidWords(comet, distance), { name: '67P/Churyumov–Gerasimenko', size: '5015 m long' });
 });
 
+test('the labels: medium unless one chose, as chosen on this device, and hidden on asking', async () => {
+  const { LabelLook } = await import('../../web/js/asteroid-on-model.js');
+  const { StoredChoice } = await import('../../web/js/stored-choice.js');
+  const kept = new Map();
+  const storage = () => ({ getItem: (k) => kept.get(k) ?? null, setItem: (k, v) => kept.set(k, String(v)) });
+  const container = () => ({ dataset: {}, hidden: false, toggleAttribute(name, on) { this.hidden = on; } });
+  const look = (into) => new LabelLook(into, {
+    size: new StoredChoice('ptm.objectLabels', { allowed: LabelLook.SIZES, storage }),
+    shown: new StoredChoice('ptm.objectLabelsShown', { allowed: ['yes', 'no'], storage }),
+  });
+  const first = container(), labels = look(first);
+  assert.equal(first.dataset.objectLabels, 'medium');
+  assert.equal(first.hidden, false);
+  labels.setSize('small');
+  labels.setSize('huge');
+  labels.setShown(false);
+  assert.deepEqual([first.dataset.objectLabels, first.hidden], ['small', true], 'an unknown size changes nothing');
+  const again = container();
+  look(again);
+  assert.deepEqual([again.dataset.objectLabels, again.hidden], ['small', true], 'kept for the next visit');
+});
+

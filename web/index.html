@@ -212,8 +212,19 @@
             </label>
             <div class="search-results glass" id="asteroid-results" hidden></div>
           </div>
-          <label class="slider asteroid-height" id="asteroid-height-row" hidden>Above the ground <output id="asteroid-height-val"></output><input type="range" id="asteroid-height" min="0" max="1" step="0.001" value="0"></label>
+          <label class="slider object-slider" id="asteroid-height-row" hidden>Above the ground <output id="asteroid-height-val"></output><input type="range" id="asteroid-height" min="0" max="1" step="0.001" value="0"></label>
+          <label class="slider object-slider" id="asteroid-turn-row" title="Turns the chosen one round the vertical axis" hidden>Turn <output id="asteroid-turn-val"></output><input type="range" id="asteroid-turn" min="0" max="360" step="1" value="0"></label>
+          <label class="slider object-slider" id="asteroid-tilt-row" title="Tilts the chosen one round a horizontal axis" hidden>Tilt <output id="asteroid-tilt-val"></output><input type="range" id="asteroid-tilt" min="-180" max="180" step="1" value="0"></label>
           <div class="asteroid-list" id="asteroid-list" hidden></div>
+          <div class="object-labels" id="object-labels" hidden>
+            <span>Labels</span>
+            <div class="seg" id="label-sizes" role="group" aria-label="Size of the labels">
+              <button type="button" data-label-size="large" aria-pressed="false">Large</button>
+              <button type="button" data-label-size="medium" aria-pressed="false">Medium</button>
+              <button type="button" data-label-size="small" aria-pressed="false">Small</button>
+            </div>
+            <button type="button" class="btn small" id="labels-toggle" aria-pressed="false">Hide labels</button>
+          </div>
           <button type="button" class="btn small" id="asteroid-remove" hidden>Take them all off</button>
         </div>
         <p class="hint ruler-hint" id="ruler-hint" hidden>The ruler: carry its ring to another point. Its foot keeps the level of the “0”; carry the “0” for another level. Esc puts the ruler away.</p>

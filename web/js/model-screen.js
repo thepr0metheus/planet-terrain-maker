@@ -9,7 +9,7 @@ import { Buildings, BuildingsError, buildingsSolid } from './buildings.js';
 import { TurnDials } from './turn-dials.js';
 import { HeightProbe } from './height-probe.js';
 import { HeightRuler } from './height-ruler.js';
-import { AsteroidsOnModel } from './asteroid-on-model.js';
+import { AsteroidsOnModel, LabelLook } from './asteroid-on-model.js';
 import { AsteroidLists, AsteroidSearch, ObjectChoices, entryOf } from './asteroid-search.js';
 import { objZipOf, stlOf, threeMfOf } from './exporters.js';
 import { exportScene, glbOf, usdzOf } from './export-scene.js';
@@ -110,6 +110,7 @@ export class ModelScreen {
     });
     this._objectChoices = new ObjectChoices({ list: $('object-choices'), distance: formatDistance, onPick: (entry) => this._putAsteroid(entry) });
     this._objectsShown = null;      // whose tools are open: 'asteroid', 'comet', 'vehicle', or null
+    this._labelLook = new LabelLook($('model-screen'));
     this.view.onFrame(() => {
       this._dials.place(); this._probe.place(); this._linePoints.place(); this._ruler.place(); this._asteroids.place();
     });
@@ -208,8 +209,9 @@ export class ModelScreen {
 
   // The tools under the camera bar for what can be put on the model: a button each for asteroids (a
   // search), comets and spacecraft (a short list), and with any of them the row of what stands on the
-  // model, the height of the one chosen and a way to take them all off. The asteroid list opens by
-  // itself only while nothing is on the model: it would cover their chips. kind: whose, or null.
+  // model, the height, turn and tilt of the one chosen, the labels' size and a button to hide them, and
+  // a way to take them all off. The asteroid list opens by itself only while nothing is on the model: it
+  // would cover their chips. kind: whose, or null.
   async _showObjects(kind) {
     this._objectsShown = kind;
     $('asteroid-tools').hidden = !kind;
@@ -241,13 +243,14 @@ export class ModelScreen {
   }
 
   // The asteroids on the model as a row of their names: a name chooses that one, its cross takes it
-  // off; the height over the ground of the one chosen; and a way to take them all off.
+  // off; the height over the ground, the turn and the tilt of the one chosen; the labels' look; and a
+  // way to take them all off.
   _asteroidControls() {
     const items = this._asteroids.items, chosen = this._asteroids.chosen;
     $('asteroid-list').replaceChildren(...items.map((item) => {
       const name = item.name;
       const pick = Dom.el('button', { type: 'button', class: 'pick', 'aria-pressed': String(item === chosen),
-        title: t('{name}: the slider raises and lowers it', { name }) }, name);
+        title: t('{name}: the sliders raise, turn and tilt it', { name }) }, name);
       pick.addEventListener('click', () => this._asteroids.choose(item));
       const drop = Dom.el('button', { type: 'button', class: 'drop', title: t('Take {name} off the model', { name }),
         'aria-label': t('Take {name} off the model', { name }) }, Icon.make('x', 14));
@@ -256,8 +259,13 @@ export class ModelScreen {
     }));
     $('asteroid-list').hidden = !items.length;
     $('asteroid-remove').hidden = items.length < 2;
-    $('asteroid-height-row').hidden = !chosen;
+    $('object-labels').hidden = !items.length;
+    this._labelControls();
+    for (const id of ['asteroid-height-row', 'asteroid-turn-row', 'asteroid-tilt-row']) $(id).hidden = !chosen;
     if (!chosen) return;
+    $('asteroid-turn').value = String(chosen.turnDeg);
+    $('asteroid-tilt').value = String(chosen.tiltDeg);
+    this._turnWords(chosen);
     // the slider goes as the square root of the height: the low heights, which matter most, get most of it
     const highest = this._asteroids.highestM;
     $('asteroid-height').value = String(highest > 0 ? Math.sqrt(chosen.altitudeM / highest) : 0);
@@ -270,7 +278,7 @@ export class ModelScreen {
     if (this._model && !this._model.isSplit && !this._restoring) this._model.settings.asteroids = this._asteroids.saved();
   }
 
-  // A model's saved asteroids put back where they were, as high as they were.
+  // A model's saved asteroids put back where they were, as high and as turned as they were.
   async _restoreAsteroids(saved) {
     const model = this._model;
     this._restoring = true;
@@ -280,7 +288,8 @@ export class ModelScreen {
       for (const one of saved) {
         const asteroid = entryOf(one.asteroid, lists);
         if (!asteroid || this._model !== model) continue;
-        if (await this._asteroids.add(asteroid, one.at, { exact: true, altitudeM: one.altitudeM ?? 0 })) back += 1;
+        const placed = { exact: true, altitudeM: one.altitudeM ?? 0, turnDeg: one.turnDeg ?? 0, tiltDeg: one.tiltDeg ?? 0 };
+        if (await this._asteroids.add(asteroid, one.at, placed)) back += 1;
       }
       if (this._model === model && back === saved.length) model.settings.asteroids = this._asteroids.saved();
     } catch (e) {
@@ -288,6 +297,28 @@ export class ModelScreen {
     } finally {
       if (this._model === model) this._restoring = false;    // a newer model's restore keeps its own
     }
+  }
+
+  // The turn or the tilt slider moved: the chosen one turned round the vertical and tilted round a
+  // horizontal axis, about its middle.
+  _asteroidTurn() {
+    this._asteroids.setTurn(Number($('asteroid-turn').value), Number($('asteroid-tilt').value));
+    if (this._asteroids.chosen) this._turnWords(this._asteroids.chosen);
+  }
+
+  // The labels' size and whether they show, as chosen.
+  _labelControls() {
+    for (const button of $('label-sizes').querySelectorAll('[data-label-size]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.labelSize === this._labelLook.size));
+    }
+    const shown = this._labelLook.shown;
+    $('labels-toggle').textContent = shown ? t('Hide labels') : t('Show labels');
+    $('labels-toggle').setAttribute('aria-pressed', String(!shown));
+  }
+
+  _turnWords(item) {
+    $('asteroid-turn-val').textContent = `${number(item.turnDeg)}°`;
+    $('asteroid-tilt-val').textContent = `${number(item.tiltDeg)}°`;
   }
 
   // The slider moved: the chosen asteroid's new height over the ground.
@@ -409,6 +440,17 @@ export class ModelScreen {
       this._asteroidSearch.clear();
     });
     $('asteroid-height').addEventListener('input', () => this._asteroidHeight());
+    for (const id of ['asteroid-turn', 'asteroid-tilt']) $(id).addEventListener('input', () => this._asteroidTurn());
+    for (const button of $('label-sizes').querySelectorAll('[data-label-size]')) {
+      button.addEventListener('click', () => {
+        this._labelLook.setSize(button.dataset.labelSize);
+        this._labelControls();
+      });
+    }
+    $('labels-toggle').addEventListener('click', () => {
+      this._labelLook.setShown(!this._labelLook.shown);
+      this._labelControls();
+    });
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || !this._ruler.on || $('model-screen').hidden) return;
       if (e.target?.closest?.('input, select, textarea, [contenteditable], dialog')) return;

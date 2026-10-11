@@ -47,9 +47,12 @@ the same library to every device on your network.
   spacecraft and radar, and finds any of about 8,800 more in the DAMIT catalogue by name or number
   (`asteroid-search.js`). Put as many as you like: one put without a new click stands beside the last,
   so they compare. Each stands on the ground or hangs over it at a height you set for the one chosen
-  (its name in the row under the camera bar, or a click on it); its label carries it over another point,
-  and while it moves its projection shows on the ground with its height over it. A click on one makes
-  the view turn about it. A saved model keeps its asteroids, where they stood and as high. The shapes
+  (its name in the row under the camera bar, or a click on it), and two sliders more turn it round the
+  vertical and tilt it round a horizontal axis: it still rests on its lowest point (`turned-shape.js`).
+  Its label carries it over another point, and while it moves its projection shows on the ground with
+  its height over it; the labels come large, medium or small, or hide, as the browser remembers. A click
+  on one makes the view turn about it. A saved model keeps its asteroids, where they stood, as high and
+  as turned. The shapes
   are fetched by the server the first time and kept (`app/shapes.py`); the lists are made by
   `tools/asteroids.py`.
 - **Comets and spacecraft at their real size** too, each under a button of its own and placed the same
