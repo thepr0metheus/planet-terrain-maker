@@ -183,6 +183,7 @@ export class CompareFlow {
         }
         if (!selection) return false;
         this.sources.refresh();
+        this._map.pictureFromTop(selection.world);
         selection.turnable = this.wizard.kind === 'two';
         selection.turnDeg = origin === 'place1' ? 0 : turnForMask(this._maskTurn);
         this._selections.set(origin, selection);

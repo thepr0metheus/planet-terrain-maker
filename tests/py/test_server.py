@@ -220,6 +220,11 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(kept[-1]["message"], "the picture of the model came out blank")
         self.assertEqual(json.loads(kept[-1]["details"]), {"width": 8192, "touch": True})
         self.assertEqual(kept[-1]["agent"], "iPad")
+        self.assertIs(kept[-1]["automated"], False, "a person's browser")
+        self.client.post("/api/client-error", json={"message": "a test run", "agent": "HeadlessChrome", "automated": True})
+        self.client.post("/api/client-error", json={"message": "not quite", "automated": "yes"})
+        kept = self.client.get("/api/client-errors?last=2").get_json()["errors"]
+        self.assertEqual([e["automated"] for e in kept], [True, False], "told apart: true only when the page says true")
 
     def test_clearing_the_cache_is_said_only_to_the_browser_that_asks(self):
         answer = self.client.post("/api/clear-cache")

@@ -226,6 +226,9 @@ export class PlaceCapture {
       }
       if (source.probeZoom) z = await this._availableZoom(source, box, z, signal);
       if (automatic) picturePx = PictureDetail.pixels(side, source.nativeM ?? PictureDetail.metres(world, lat, z), pictureMostPx);
+      if (!source.tileUrl && !await this._covered(world.grid, source.tiles, box, z, tilePx, signal)) {
+        throw new CaptureError(t('There are no pictures of this place in “{source}”: choose another picture.', { source: t(source.label) }));
+      }
       const stitched = await this._stitch(world.grid, source.tiles, box, z, signal, tilePx, source.tileUrl?.bind(source));
       from = { image: stitched.canvas, at: (la, lo) => stitched.at(la, lo) };
     } else {
@@ -342,6 +345,31 @@ export class PlaceCapture {
         return null;
       }
     }
+  }
+
+  // Whether a layer has pictures over the box at all, asked of the tiles at its middle and corners. A
+  // source of one country (USGS: the USA) answers 404 for every tile elsewhere, and the stitch asked
+  // for all of them, some 800 for 26 km, minutes long, before it said so. A failure that is no 404
+  // says nothing of the pictures: true, and the stitch says what failed.
+  async _covered(grid, layer, box, z, tilePx, signal) {
+    const project = projections[grid];
+    const level = z - Math.log2(tilePx / 256);
+    const middle = [(box.north + box.south) / 2, (box.west + box.east) / 2];
+    const tiles = new Map();
+    for (const [lat, lon] of [middle, [box.north, box.west], [box.north, box.east], [box.south, box.west], [box.south, box.east]]) {
+      const p = project(lat, lon, z);
+      const tx = Math.floor(p.x / tilePx), ty = Math.floor(p.y / tilePx);
+      tiles.set(`${tx}/${ty}`, [tx, ty]);
+    }
+    for (const [tx, ty] of tiles.values()) {
+      const answer = await this._tile(`/api/tile/${layer}/${level}/${tx}/${ty}`, signal);
+      if (!answer.ok) {
+        if (answer.status !== 404) return true;
+        continue;
+      }
+      if (await this._tilePicture(await answer.blob())) return true;
+    }
+    return false;
   }
 
   // A tile's answer. A failed one is asked again after each pause; the last answer is given as it

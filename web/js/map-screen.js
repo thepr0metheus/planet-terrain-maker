@@ -13,6 +13,7 @@ import { BAND, TerrainEdge } from './terrain-edge.js';
 import { LocalFrame } from './geo.js';
 import { PlaceNames } from './place-names.js';
 import { WORLDS, WORLD_ORDER, mPerDegOf, pictureOptions, worldOf } from './worlds.js';
+import { PictureChoices } from './picture-choices.js';
 import { StoredChoice } from './stored-choice.js';
 import { DEVICE } from './device.js';
 import { language, number, t } from './i18n.js';
@@ -33,15 +34,13 @@ export class MapScreen {
     this.onWorldPicked = null;      // (id) -> true when the guide takes the choice of a world
     this.onKind = () => {};         // ('one' | 'two'): the kind of model asked for
     this._abort = null;
-    // The heights and the picture each world's captures take, kept per world (Earth's under the keys
-    // it had when only Earth had a choice).
+    // The heights each world's captures take, kept per world between visits (Earth's under the key it
+    // had when only Earth had a choice). The picture is chosen for each place anew: PictureChoices.
     this._choices = Object.fromEntries(WORLD_ORDER.map((id) => {
       const key = (what) => (id === 'earth' ? `ptm.${what}` : `ptm.${what}.${id}`);
-      return [id, {
-        heights: new StoredChoice(key('heights'), { allowed: WORLDS[id].heights.map((s) => s.id) }),
-        picture: new StoredChoice(key('picture'), { allowed: this._pictureOptions(WORLDS[id]).map((s) => s.id) }),
-      }];
+      return [id, { heights: new StoredChoice(key('heights'), { allowed: WORLDS[id].heights.map((s) => s.id) }) }];
     }));
+    this._pictures = new PictureChoices((id) => this._pictureOptions(worldOf(id)));
     this._pxChoice = new StoredChoice('ptm.pictureDetail', { allowed: ['auto', '2048', '4096', '8192'] });
     this._cornersChoice = new StoredChoice('ptm.corners', { allowed: ['smooth', 'sharp'] });
     this._followChoice = new StoredChoice('ptm.follow', { allowed: ['ridge', 'valley'] });
@@ -103,7 +102,7 @@ export class MapScreen {
       this._sources(this.view.world);
     });
     $('picture-source').addEventListener('change', () => {
-      this._choices[this.world].picture.set($('picture-source').value);
+      this._pictures.choose(this.world, $('picture-source').value);
       this._sources(this.view.world);
     });
     $('picture-px').addEventListener('change', () => {
@@ -235,8 +234,14 @@ export class MapScreen {
 
   get guideStep() { return this._guide; }
 
+  // A new place's picture starts from the top of its world's list, whatever the last place took.
+  pictureFromTop(world) {
+    this._pictures.fromTop(world);
+    this._sources(worldOf(world));
+  }
+
   setSources({ world, pictureId, heightsId }) {
-    if (pictureId) this._choices[world].picture.set(pictureId);
+    if (pictureId) this._pictures.choose(world, pictureId);
     if (heightsId) this._choices[world].heights.set(heightsId);
     this._sources(worldOf(world));
   }
@@ -409,9 +414,7 @@ export class MapScreen {
   }
 
   _picture(id) {
-    const world = worldOf(id);
-    const options = this._pictureOptions(world);
-    return options.find((p) => p.id === this._choices[id].picture.get()) ?? options.find((p) => p.id === 's2') ?? options[0];
+    return this._pictures.chosen(id);
   }
 
   // The heights chosen for a world, the first by default.

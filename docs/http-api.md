@@ -60,7 +60,7 @@ The browser drops the map tiles, pictures and page files it keeps. The server's 
 
 An error that happened in the page, for the server's log.
 
-- body: {message, where, stack, page, version, details, agent} as JSON.
+- body: {message, where, stack, page, version, details, agent, automated} as JSON; automated: true from a browser a test program drives.
 - 204: Written to the log.
 - 429: More than 30 a minute: not written.
 
@@ -69,7 +69,7 @@ An error that happened in the page, for the server's log.
 The errors the page reported lately, from any device.
 
 - `last` (query, integer, optional): How many, the newest last; 50 when left out, at most 300.
-- 200: {errors: [{time, message, where, page, version, details, agent, stack}]}.
+- 200: {errors: [{time, message, where, page, version, details, agent, automated, stack}]}.
 
 ## GET `/api/earth/heights`
 

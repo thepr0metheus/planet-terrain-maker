@@ -142,8 +142,8 @@ or behind a reverse proxy of your own that signs people in.
   as a smaller copy made by the server, and the file itself stays as it was.
 - **Clear the cache** on the library screen clears this site's cache in this browser only: the tiles,
   pictures and page files. The models and the choices kept on the device stay.
-- **Errors of the page** go to the server's log, and the last 300 are kept to read from any device:
-  `GET /api/client-errors`.
+- **Errors of the page** go to the server's log, and the last 300 are kept to read from any device: `GET
+  /api/client-errors`. Those from a browser a test program drives are marked `automated`.
 
 ## How it is built
 

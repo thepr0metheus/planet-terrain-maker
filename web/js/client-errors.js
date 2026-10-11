@@ -5,13 +5,14 @@
 let version = null;
 fetch('/healthz').then((r) => r.json()).then((h) => { version = h.version; }).catch(() => {});
 
-// details: what helps to see why (sizes, the device), as an object.
+// details: what helps to see why (sizes, the device), as an object. automated: a browser a program
+// drives (a test run; navigator.webdriver), so that what such runs report is told apart from people's.
 export function reportError(error, where = '', details = null) {
   const body = {
     message: String(error?.message ?? error).slice(0, 600),
     stack: String(error?.stack ?? '').slice(0, 2400),
     where, page: location.pathname, version: version ?? 'unknown',
-    details, agent: navigator.userAgent,
+    details, agent: navigator.userAgent, automated: navigator.webdriver === true,
   };
   fetch('/api/client-error', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     .catch(() => {});

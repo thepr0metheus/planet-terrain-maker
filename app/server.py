@@ -144,13 +144,15 @@ class ClientErrors:
         stack = str(report.get("stack", ""))[: self.FIELD * 4]
         details = report.get("details")
         details = json.dumps(details, ensure_ascii=False)[: self.FIELD * 4] if isinstance(details, dict) else ""
-        log(f"client error: {cut['message']} [{cut['where']}] page {cut['page']} version {cut['version']}")
+        automated = report.get("automated") is True     # a browser a test program drives
+        log(f"client error{' (automated)' if automated else ''}: {cut['message']} [{cut['where']}] page {cut['page']} "
+            f"version {cut['version']}")
         if details:
             log(f"  details: {details}")
         if stack:
             log("  " + stack.replace("\n", "\n  "))
         self._keep({"time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)), **cut, "details": details,
-                    "agent": str(report.get("agent", ""))[: self.FIELD], "stack": stack})
+                    "agent": str(report.get("agent", ""))[: self.FIELD], "automated": automated, "stack": stack})
         return True
 
     def recent(self, count: int) -> list:
@@ -687,7 +689,7 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
 
     @app.get("/api/client-errors")
     @api(Param("last", "integer", "How many, the newest last; 50 when left out, at most 300."),
-         responses={200: "{errors: [{time, message, where, page, version, details, agent, stack}]}."})
+         responses={200: "{errors: [{time, message, where, page, version, details, agent, automated, stack}]}."})
     def client_errors_kept():
         """The errors the page reported lately, from any device."""
         try:
@@ -697,7 +699,8 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
         return jsonify({"errors": client_errors.recent(last)})
 
     @app.post("/api/client-error")
-    @api(body="{message, where, stack, page, version, details, agent} as JSON.",
+    @api(body="{message, where, stack, page, version, details, agent, automated} as JSON; automated: true from a "
+              "browser a test program drives.",
          responses={204: "Written to the log.", 429: "More than 30 a minute: not written."})
     def client_error():
         """An error that happened in the page, for the server's log."""

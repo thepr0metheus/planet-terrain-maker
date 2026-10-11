@@ -80,7 +80,9 @@ export class MapView {
     this._putLayers(base);
     if (world.grid === 'mercator') {
       this._map.setMinZoom(2);
-      this._map.setMaxBounds(null);
+      // Earth's map stays within the 180th meridian: a quick fling once sent it round the world, and
+      // no place across that meridian can be captured anyway
+      this._map.setMaxBounds([[-85.06, -180], [85.06, 180]]);
     } else {
       this._map.setMinZoom(1);
       this._map.setMaxBounds([[-95, -200], [95, 200]]);
@@ -229,7 +231,10 @@ export class MapView {
       const w = (size.right - size.left) * FRAME_SHARE, h = (size.bottom - size.top) * FRAME_SHARE;
       radiusM = Math.min(w * scale.ew, h * scale.ns) / 2;
     }
-    return { cx, cy, lat: centre.lat, lon: centre.lng, radiusM, w: 2 * radiusM / scale.ew, h: 2 * radiusM / scale.ns };
+    // a map dragged past the 180th meridian gives longitudes beyond it: the frame takes the same
+    // place within ±180 (a frame cannot be made outside, and an error in a move breaks the map's pan)
+    const lon = ((centre.lng + 180) % 360 + 360) % 360 - 180;
+    return { cx, cy, lat: centre.lat, lon, radiusM, w: 2 * radiusM / scale.ew, h: 2 * radiusM / scale.ns };
   }
 
   // Draw the circle where frameNow() says. Run on every move, zoom and resize.

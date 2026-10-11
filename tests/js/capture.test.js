@@ -166,6 +166,44 @@ test('a tile the server could not get is asked again; one that never comes stops
   assert.equal(refused.asked.length, 1, 'a refusal is not asked again');
 });
 
+test('a source with no pictures of the place is told at once, from its middle and corners, not after all its tiles', async () => {
+  const canvas = () => ({ getContext: () => ({ drawImage() {}, getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }) }) });
+  const box = { south: 41.48, north: 41.72, west: 41.68, east: 42.0 };      // about 26 km in Georgia
+  const run = (answer) => {
+    const asked = [];
+    const capture = new PlaceCapture({
+      canvas, decode: async () => ({}), wait: async () => {},
+      fetchFn: async (url) => { asked.push(url); const a = answer(asked.length); return { ok: a === 200, status: a, blob: async () => new Blob([]) }; },
+    });
+    return { asked, covered: capture._covered('mercator', 'earth-usgs', box, 15, 256, null) };
+  };
+  const none = run(() => 404);
+  assert.equal(await none.covered, false);
+  assert.equal(none.asked.length, 5, 'the middle and the four corners, each its own tile');
+  const middle = run(() => 200);
+  assert.equal(await middle.covered, true);
+  assert.equal(middle.asked.length, 1, 'pictures in the middle: nothing more asked');
+  const edge = run((n) => (n === 5 ? 200 : 404));
+  assert.equal(await edge.covered, true, 'a place at the edge of the country: the stitch goes on');
+  const refused = run(() => 403);
+  assert.equal(await refused.covered, true, 'a refusal says nothing of the pictures: the stitch says what failed');
+  assert.equal(refused.asked.length, 1);
+
+  // the capture of a picture stops there, with the source's name
+  const world = worldOf('earth');
+  const local = new LocalFrame(41.6, 41.84, mPerDegOf(world));
+  const frame = frameFor(new CircleOutline(13250));
+  const side = Math.max(frame.widthM, frame.heightM);
+  const asked = [];
+  const capture = new PlaceCapture({
+    canvas, decode: async () => ({}), wait: async () => {},
+    fetchFn: async (url) => { asked.push(url); return { ok: false, status: 404, blob: async () => new Blob([]) }; },
+  });
+  await assert.rejects(capture._picture(world, pictureSourceFor(world, 'usgs', side), local, frame, local.boxOf(frame.widthM / 2, frame.heightM / 2),
+    side, 2048, null, 4096), (e) => e instanceof CaptureError && /no pictures of this place in “USGS/.test(e.message));
+  assert.ok(asked.length <= 5, `${asked.length} tiles asked`);
+});
+
 test('a layer of 512-point tiles (CTX) is asked for the level one below, and its tiles are put in place', async () => {
   const canvas = () => ({ getContext: () => ({ drawImage() {}, getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }) }) });
   const asked = [];

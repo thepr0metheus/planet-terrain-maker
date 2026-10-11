@@ -310,6 +310,7 @@ export const RU = {
   'Places this close to a pole cannot be captured yet.': 'Места так близко к полюсу пока снять нельзя.',
   'The place crosses the 180th meridian: move it a little east or west.': 'Место пересекает 180-й меридиан: сдвиньте его немного на восток или запад.',
   'The source has no heights for most of this place.': 'У источника нет высот для большей части этого места.',
+  'There are no pictures of this place in “{source}”: choose another picture.': 'В «{source}» нет снимков этого места: выберите другую картинку.',
   'The map has no tiles here at this size.': 'У карты нет плиток для этого места при таком размере.',
   'The server sent heights without their size or place.': 'Сервер прислал высоты без размера или координат.',
   'The heights did not come ({status}).': 'Высоты не пришли ({status}).',
