@@ -10,6 +10,7 @@ import { TurnDials } from './turn-dials.js';
 import { HeightProbe } from './height-probe.js';
 import { HeightRuler } from './height-ruler.js';
 import { AsteroidsOnModel, LabelLook } from './asteroid-on-model.js';
+import { ANGLES } from './turned-shape.js';
 import { AsteroidLists, AsteroidSearch, ObjectChoices, entryOf } from './asteroid-search.js';
 import { objZipOf, stlOf, threeMfOf } from './exporters.js';
 import { exportScene, glbOf, usdzOf } from './export-scene.js';
@@ -27,6 +28,9 @@ import { DetailedPictures } from './detailed-pictures.js';
 
 // The buttons of what can be put on the model, and whose tools each opens.
 const OBJECT_TOGGLES = [['asteroid-toggle', 'asteroid'], ['comet-toggle', 'comet'], ['vehicle-toggle', 'vehicle']];
+// The sliders of the chosen one's angles, one for each of TurnedShape's: asteroid-turn sets turnDeg,
+// and so on. Each has its row (id-row) and its words (id-val) in the page.
+const ANGLE_SLIDERS = ANGLES.map((name) => [`asteroid-${name.replace(/Deg$/, '')}`, name]);
 const $ = (id) => document.getElementById(id);
 
 // The model's name, or the one its places' names make (names.js) while it has none of its own.
@@ -209,7 +213,7 @@ export class ModelScreen {
 
   // The tools under the camera bar for what can be put on the model: a button each for asteroids (a
   // search), comets and spacecraft (a short list), and with any of them the row of what stands on the
-  // model, the height, turn and tilt of the one chosen, the labels' size and a button to hide them, and
+  // model, the height and the angles of the one chosen, the labels' size and a button to hide them, and
   // a way to take them all off. The asteroid list opens by itself only while nothing is on the model: it
   // would cover their chips. kind: whose, or null.
   async _showObjects(kind) {
@@ -243,14 +247,14 @@ export class ModelScreen {
   }
 
   // The asteroids on the model as a row of their names: a name chooses that one, its cross takes it
-  // off; the height over the ground, the turn and the tilt of the one chosen; the labels' look; and a
-  // way to take them all off.
+  // off; the height over the ground and the angles of the one chosen; the labels' look; and a way to
+  // take them all off.
   _asteroidControls() {
     const items = this._asteroids.items, chosen = this._asteroids.chosen;
     $('asteroid-list').replaceChildren(...items.map((item) => {
       const name = item.name;
       const pick = Dom.el('button', { type: 'button', class: 'pick', 'aria-pressed': String(item === chosen),
-        title: t('{name}: the sliders raise, turn and tilt it', { name }) }, name);
+        title: t('{name}: the sliders raise, turn, tilt and lean it', { name }) }, name);
       pick.addEventListener('click', () => this._asteroids.choose(item));
       const drop = Dom.el('button', { type: 'button', class: 'drop', title: t('Take {name} off the model', { name }),
         'aria-label': t('Take {name} off the model', { name }) }, Icon.make('x', 14));
@@ -261,10 +265,10 @@ export class ModelScreen {
     $('asteroid-remove').hidden = items.length < 2;
     $('object-labels').hidden = !items.length;
     this._labelControls();
-    for (const id of ['asteroid-height-row', 'asteroid-turn-row', 'asteroid-tilt-row']) $(id).hidden = !chosen;
+    $('asteroid-height-row').hidden = !chosen;
+    for (const [id] of ANGLE_SLIDERS) $(`${id}-row`).hidden = !chosen;
     if (!chosen) return;
-    $('asteroid-turn').value = String(chosen.turnDeg);
-    $('asteroid-tilt').value = String(chosen.tiltDeg);
+    for (const [id, name] of ANGLE_SLIDERS) $(id).value = String(chosen.angles[name]);
     this._turnWords(chosen);
     // the slider goes as the square root of the height: the low heights, which matter most, get most of it
     const highest = this._asteroids.highestM;
@@ -288,7 +292,7 @@ export class ModelScreen {
       for (const one of saved) {
         const asteroid = entryOf(one.asteroid, lists);
         if (!asteroid || this._model !== model) continue;
-        const placed = { exact: true, altitudeM: one.altitudeM ?? 0, turnDeg: one.turnDeg ?? 0, tiltDeg: one.tiltDeg ?? 0 };
+        const placed = { exact: true, altitudeM: one.altitudeM ?? 0, angles: one };    // saved by their names
         if (await this._asteroids.add(asteroid, one.at, placed)) back += 1;
       }
       if (this._model === model && back === saved.length) model.settings.asteroids = this._asteroids.saved();
@@ -299,10 +303,10 @@ export class ModelScreen {
     }
   }
 
-  // The turn or the tilt slider moved: the chosen one turned round the vertical and tilted round a
-  // horizontal axis, about its middle.
+  // An angle's slider moved: the chosen one turned round the vertical, tilted round one horizontal
+  // axis and leaned round the other, about its middle, as the three sliders stand.
   _asteroidTurn() {
-    this._asteroids.setTurn(Number($('asteroid-turn').value), Number($('asteroid-tilt').value));
+    this._asteroids.setTurn(Object.fromEntries(ANGLE_SLIDERS.map(([id, name]) => [name, Number($(id).value)])));
     if (this._asteroids.chosen) this._turnWords(this._asteroids.chosen);
   }
 
@@ -317,8 +321,7 @@ export class ModelScreen {
   }
 
   _turnWords(item) {
-    $('asteroid-turn-val').textContent = `${number(item.turnDeg)}°`;
-    $('asteroid-tilt-val').textContent = `${number(item.tiltDeg)}°`;
+    for (const [id, name] of ANGLE_SLIDERS) $(`${id}-val`).textContent = `${number(item.angles[name])}°`;
   }
 
   // The slider moved: the chosen asteroid's new height over the ground.
@@ -440,7 +443,7 @@ export class ModelScreen {
       this._asteroidSearch.clear();
     });
     $('asteroid-height').addEventListener('input', () => this._asteroidHeight());
-    for (const id of ['asteroid-turn', 'asteroid-tilt']) $(id).addEventListener('input', () => this._asteroidTurn());
+    for (const [id] of ANGLE_SLIDERS) $(id).addEventListener('input', () => this._asteroidTurn());
     for (const button of $('label-sizes').querySelectorAll('[data-label-size]')) {
       button.addEventListener('click', () => {
         this._labelLook.setSize(button.dataset.labelSize);

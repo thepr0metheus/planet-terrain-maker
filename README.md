@@ -45,16 +45,15 @@ the same library to every device on your network.
 - **Asteroids at their real size** on a model of one place (`asteroid-on-model.js`): the asteroid button
   in the camera bar lists the ten most exact shapes, from Itokawa (535 m) to Ceres (946 km), taken by
   spacecraft and radar, and finds any of about 8,800 more in the DAMIT catalogue by name or number
-  (`asteroid-search.js`). Put as many as you like: one put without a new click stands beside the last,
-  so they compare. Each stands on the ground or hangs over it at a height you set for the one chosen
-  (its name in the row under the camera bar, or a click on it), and two sliders more turn it round the
-  vertical and tilt it round a horizontal axis: it still rests on its lowest point (`turned-shape.js`).
-  Its label carries it over another point, and while it moves its projection shows on the ground with
-  its height over it; the labels come large, medium or small, or hide, as the browser remembers. A click
-  on one makes the view turn about it. A saved model keeps its asteroids, where they stood, as high and
-  as turned. The shapes
-  are fetched by the server the first time and kept (`app/shapes.py`); the lists are made by
-  `tools/asteroids.py`.
+  (`asteroid-search.js`). Put as many as you like: one put without a new click stands beside the last, so
+  they compare. Each stands on the ground or hangs over it at a height you set for the one chosen (its
+  name in the row under the camera bar, or a click on it), and three sliders more turn it round the
+  vertical and tilt and lean it round the two horizontal axes: it still rests on its lowest point
+  (`turned-shape.js`). Its label carries it over another point, and while it moves its projection shows on
+  the ground with its height over it; the labels come large, medium or small, or hide, as the browser
+  remembers. A click on one makes the view turn about it. A saved model keeps its asteroids, where they
+  stood, as high and as turned. The shapes are fetched by the server the first time and kept
+  (`app/shapes.py`); the lists are made by `tools/asteroids.py`.
 - **Comets and spacecraft at their real size** too, each under a button of its own and placed the same
   way: five comets seen up close (67P/Churyumov–Gerasimenko, 9P/Tempel 1, 103P/Hartley 2, 81P/Wild 2,
   1P/Halley), and eleven rockets with the ISS. Saturn V, the Space Shuttle and the station are NASA's own

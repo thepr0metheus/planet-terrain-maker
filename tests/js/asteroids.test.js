@@ -167,3 +167,18 @@ test('the labels: medium unless one chose, as chosen on this device, and hidden 
   assert.deepEqual([again.dataset.objectLabels, again.hidden], ['small', true], 'kept for the next visit');
 });
 
+
+test('the labels: each smaller size is smaller, part by part (style.css)', () => {
+  const css = readFileSync(new URL('../../web/style.css', import.meta.url), 'utf8');
+  const px = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rule = css.match(new RegExp(`^${escaped} \\{([^}]*)\\}`, 'm'));
+    assert.ok(rule, `no rule ${selector}`);
+    return Number(rule[1].match(/(?:font-size:|font:\s*\d+)\s*([\d.]+)px/)[1]);
+  };
+  for (const part of ['name', 'size', 'note']) {
+    const [large, medium, small] = [`.asteroid-label .${part}`, `[data-object-labels="medium"] .asteroid-label .${part}`,
+      `[data-object-labels="small"] .asteroid-label .${part}`].map(px);
+    assert.ok(large > medium && medium > small && small >= 7, `${part}: ${large} > ${medium} > ${small} >= 7`);
+  }
+});

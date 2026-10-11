@@ -9,12 +9,13 @@
 // another point (carry.js: the point under the label, kept as far below it as when it was grabbed).
 // While one moves — carried, or raised and lowered by the page's slider — its projection shows too, a
 // ring on the ground with a dashed line up to it and its height over the ground; they go a moment
-// after it stops. One of them is chosen at a time: the sliders raise, turn and tilt that one (about its
-// middle, still resting on its lowest point: turned-shape.js), and grabbing a label or a click on an
-// asteroid chooses it. A click on an asteroid also makes the view turn about the point clicked, as a
-// click on the ground does (ModelView.pickAt with extras). A new asteroid put at the same point as the
-// one before stands beside it, to the right as the camera looks, so the two compare. The labels come
-// large, medium or small, or not at all, as the viewer chose on this device (LabelLook).
+// after it stops. One of them is chosen at a time: the sliders raise that one, turn it round the
+// vertical and tilt and lean it round the two horizontal axes (about its middle, still resting on its
+// lowest point: turned-shape.js), and grabbing a label or a click on an asteroid chooses it. A click
+// on an asteroid also makes the view turn about the point clicked, as a click on the ground does
+// (ModelView.pickAt with extras). A new asteroid put at the same point as the one before stands beside
+// it, to the right as the camera looks, so the two compare. The labels come large, medium or small, or
+// not at all, as the viewer chose on this device (LabelLook).
 //
 // A model of one place only (the page hides the tool for two places). The asteroids are drawn into the
 // view, so a picture or a video of the view has them; the model's files never do.
@@ -26,7 +27,7 @@ import { CarriedPoint } from './carry.js';
 import { metresPerUnit, readObj, readRadiusGrid, readWrl } from './asteroid-shapes.js';
 import { asteroidWords, keyOf } from './asteroid-search.js';
 import { VehicleShapes } from './vehicle-shapes.js';
-import { TurnedShape } from './turned-shape.js';
+import { ANGLES, TurnedShape } from './turned-shape.js';
 import { StoredChoice } from './stored-choice.js';
 import { number, t } from './i18n.js';
 
@@ -128,7 +129,7 @@ function bodyShape(read, metres, colour) {
 class PlacedAsteroid {
   // asteroid: the list's entry. shape: fetchShape's. at: { u, v }, its projection. model: as
   // AsteroidsOnModel.measure takes it. onChoose(this): its label was grabbed. onMove(): it moved.
-  constructor({ view, container, distance, asteroid, shape, at, altitudeM = 0, turnDeg = 0, tiltDeg = 0, model, onChoose, onMove }) {
+  constructor({ view, container, distance, asteroid, shape, at, altitudeM = 0, angles = {}, model, onChoose, onMove }) {
     this.asteroid = asteroid;
     this.at = at;
     this.altitudeM = Math.max(0, altitudeM);   // how high its lowest point hangs over the ground under it
@@ -138,8 +139,8 @@ class PlacedAsteroid {
     this._shape = shape;
     const size = new THREE.Box3().setFromObject(shape).getSize(new THREE.Vector3());
     this.lengthM = Math.max(size.x, size.y, size.z);     // its longest extent, metres
-    this._turned = new TurnedShape(shape);               // turned and tilted about its middle
-    this._turned.turn(turnDeg, tiltDeg);
+    this._turned = new TurnedShape(shape);               // turned, tilted and leaned about its middle
+    this._turned.turn(angles);
     this._holder = new THREE.Group();      // metres in, the model's millimetres out, at the point
     this._holder.add(this._turned.object);
     this._movedAt = -Infinity;    // when it last moved (performance.now): the projection shows a while
@@ -162,16 +163,16 @@ class PlacedAsteroid {
 
   get name() { return asteroidWords(this.asteroid, this._distance).name; }
 
-  get turnDeg() { return this._turned.turnDeg; }
+  // { turnDeg, tiltDeg, leanDeg }: how it is turned (TurnedShape).
+  get angles() { return this._turned.angles; }
 
-  get tiltDeg() { return this._turned.tiltDeg; }
-
-  // Its height as it stands now, turned and tilted, metres.
+  // Its height as it stands now, as turned, metres.
   get _heightM() { return this._turned.heightM; }
 
-  // Turned round the vertical and tilted round a horizontal axis: it still rests on its lowest point.
-  setTurn(turnDeg, tiltDeg) {
-    this._turned.turn(turnDeg, tiltDeg);
+  // Turned round the vertical and the two horizontal axes as `angles` says: it still rests on its
+  // lowest point.
+  setTurn(angles) {
+    this._turned.turn(angles);
     this._movedAt = performance.now();
     this._lay();
     this._onMove();
@@ -316,19 +317,20 @@ export class AsteroidsOnModel {
   }
 
   // What a saved model keeps of them (settings.asteroids): each one's key in its list, its projection,
-  // its height over the ground, and its turn and tilt in whole degrees.
+  // its height over the ground, and its three angles in whole degrees (turnDeg, tiltDeg, leanDeg).
   saved() {
     return this._items.map((item) => ({
       asteroid: keyOf(item.asteroid), at: { u: Number(item.at.u.toFixed(6)), v: Number(item.at.v.toFixed(6)) },
-      altitudeM: Math.round(item.altitudeM), turnDeg: Math.round(item.turnDeg), tiltDeg: Math.round(item.tiltDeg),
+      altitudeM: Math.round(item.altitudeM),
+      ...Object.fromEntries(ANGLES.map((name) => [name, Math.round(item.angles[name])])),
     }));
   }
 
   // Put an asteroid on the model, its projection at a point of its top (beside the last one when that
   // was put at the same point; exactly there with `exact`, as a saved model has it), `altitudeM` over
-  // the ground, and choose it. The new one, or null when it did not come (said already) or the model
-  // changed meanwhile.
-  async add(asteroid, at, { exact = false, altitudeM = 0, turnDeg = 0, tiltDeg = 0 } = {}) {
+  // the ground, turned as `angles` says (TurnedShape.anglesOf reads them), and choose it. The new one,
+  // or null when it did not come (said already) or the model changed meanwhile.
+  async add(asteroid, at, { exact = false, altitudeM = 0, angles = {} } = {}) {
     const generation = this._generation;
     let shape;
     try {
@@ -346,7 +348,7 @@ export class AsteroidsOnModel {
     this._lastStart = at;
     const item = new PlacedAsteroid({
       view: this._view, container: this._container, distance: this._distance, asteroid, shape, model: this._model,
-      at: again ? this._beside(last, shape) : at, altitudeM, turnDeg, tiltDeg, onChoose: (one) => this.choose(one), onMove: () => this._onMove(),
+      at: again ? this._beside(last, shape) : at, altitudeM, angles, onChoose: (one) => this.choose(one), onMove: () => this._onMove(),
     });
     this._items.push(item);
     this._reach();
@@ -383,8 +385,8 @@ export class AsteroidsOnModel {
     this._chosen?.setAltitude(metres);
   }
 
-  setTurn(turnDeg, tiltDeg) {
-    this._chosen?.setTurn(turnDeg, tiltDeg);
+  setTurn(angles) {
+    this._chosen?.setTurn(angles);
   }
 
   // The one a three.js object (a click's hit) is part of, or null.
