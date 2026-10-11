@@ -90,6 +90,7 @@
           Heights and pictures: Esri World Imagery, Sentinel-2 cloudless by EOX, AWS Terrain Tiles, Copernicus DEM via OpenTopography,
           NASA Trek (Moon, Mars, Venus), USGS Gazetteer of Planetary Nomenclature; names and buildings © OpenStreetMap contributors.
           Asteroids: NASA 3D Resources, JAXA (Hayabusa2), PDS radar shape models, DAMIT (Ďurech et al., CC BY 4.0), JPL Small-Body Database.
+          Comets: PDS Small Bodies Node (Rosetta, Deep Impact, EPOXI, Stardust, Giotto and Vega). Spacecraft: NASA 3D Resources; the other rockets are drawn from their published dimensions.
           The 3D view: three.js; the map: Leaflet.
         </footer>
       </div>
@@ -190,6 +191,12 @@
           <button type="button" id="asteroid-toggle" aria-pressed="false" title="Put an asteroid on the model at its real size" aria-label="Asteroid">
             <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 4.5 14.5 3l5 4.5 1 6-3.5 5.5-6.5 1.5L4.5 17 3 10.5Z"/><path d="M9.5 9.5h.01M14.5 12.5h.01M10 15h.01" stroke-width="3"/></svg>
           </button>
+          <button type="button" id="comet-toggle" aria-pressed="false" title="Put a comet on the model at its real size" aria-label="Comet">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="16.5" cy="7.5" r="3.5"/><path d="M13.6 9.6 4 18M14.4 10.9 7 20.5M12.2 8.2 3 13.5"/></svg>
+          </button>
+          <button type="button" id="vehicle-toggle" aria-pressed="false" title="Put a rocket or the space station on the model at its real size" aria-label="Spacecraft">
+            <svg class="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 2.5c2.2 2 3.2 4.6 3.2 7.6V17H8.8v-6.9c0-3 1-5.6 3.2-7.6Z"/><path d="M8.8 12.5 6 15.5V19l2.8-2M15.2 12.5l2.8 3V19l-2.8-2M10.5 17v3.5M13.5 17v3.5"/></svg>
+          </button>
           <button type="button" id="panel-toggle" aria-pressed="false" title="Hide panel" aria-label="Hide panel">
             <svg class="icon panel-close" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18M8 9l3 3-3 3"/></svg>
             <svg class="icon panel-open" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" hidden><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18M10 15l-3-3 3-3"/></svg>
@@ -197,7 +204,8 @@
         </div>
         <p class="hint fly-holding" id="fly-holding" hidden></p>
         <div class="asteroid-tools" id="asteroid-tools" hidden>
-          <div class="place-search">
+          <div class="object-choices" id="object-choices" hidden></div>
+          <div class="place-search" id="asteroid-search-row">
             <label class="search">
               <span class="search-icon icon-slot" data-icon="search"></span>
               <input id="asteroid-search" type="search" placeholder="An asteroid: a name or a number" autocomplete="off" spellcheck="false" aria-label="Find an asteroid" enterkeyhint="search">
@@ -206,7 +214,7 @@
           </div>
           <label class="slider asteroid-height" id="asteroid-height-row" hidden>Above the ground <output id="asteroid-height-val"></output><input type="range" id="asteroid-height" min="0" max="1" step="0.001" value="0"></label>
           <div class="asteroid-list" id="asteroid-list" hidden></div>
-          <button type="button" class="btn small" id="asteroid-remove" hidden>Remove all asteroids</button>
+          <button type="button" class="btn small" id="asteroid-remove" hidden>Take them all off</button>
         </div>
         <p class="hint ruler-hint" id="ruler-hint" hidden>The ruler: carry its ring to another point. Its foot keeps the level of the “0”; carry the “0” for another level. Esc puts the ruler away.</p>
         <div class="fly-tools" id="fly-tools" hidden>

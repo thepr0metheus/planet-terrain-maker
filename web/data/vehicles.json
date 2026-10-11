@@ -1,0 +1,72 @@
+[
+  {"id": "saturn-v", "name": "Saturn V", "group": "NASA", "kind": "glb", "heightM": 110.6,
+   "url": "https://raw.githubusercontent.com/nasa/NASA-3D-Resources/master/3D%20Models/Saturn%20V/Saturn%20V.glb",
+   "fit": "height", "credit": "NASA 3D Resources"},
+  {"id": "sls", "name": "SLS Block 1", "group": "NASA", "kind": "built", "heightM": 98.1, "widthM": 16.6,
+   "parts": [
+     {"colour": "#d9792b", "profile": [[0, 4.2], [64.6, 4.2]]},
+     {"colour": "#eeeeec", "profile": [[64.6, 4.2], [73.2, 2.5], [86.2, 2.5], [88.7, 2.0], [91.2, 1.1], [92.0, 0.35], [97.2, 0.3], [98.1, 0]]},
+     {"colour": "#f2f2f0", "around": {"count": 2, "radius": 6.45, "turnDeg": 90},
+      "profile": [[0, 1.85], [48.0, 1.85], [51.6, 1.3], [53.3, 0.6], [54.0, 0]]}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "space-shuttle", "name": "Space Shuttle", "group": "NASA", "kind": "glb", "heightM": 56.1,
+   "url": "https://raw.githubusercontent.com/nasa/NASA-3D-Resources/master/3D%20Models/Space%20Shuttle%20(A)/Space%20Shuttle%20(A).glb",
+   "turnDeg": [90, 0, 0], "fit": "height", "credit": "NASA 3D Resources"},
+  {"id": "starship", "name": "Starship and Super Heavy", "group": "SpaceX", "kind": "built", "heightM": 124.4, "widthM": 9,
+   "parts": [
+     {"colour": "#b9bdc2", "profile": [[0, 4.5], [72.3, 4.5]]},
+     {"colour": "#3d3f43", "profile": [[72.3, 4.52], [74.0, 4.52]]},
+     {"colour": "#c4c8cc", "profile": [[74.0, 4.5], [113.5, 4.5], [116.6, 4.2], [119.6, 3.4], [122.1, 2.2], [123.7, 1.0], [124.4, 0]]}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "falcon-heavy", "name": "Falcon Heavy", "group": "SpaceX", "kind": "built", "heightM": 70, "widthM": 12.2,
+   "parts": [
+     {"colour": "#f2f2f2", "profile": [[0, 1.83], [41.2, 1.83]]},
+     {"colour": "#242424", "profile": [[41.2, 1.84], [47.7, 1.84]]},
+     {"colour": "#f2f2f2", "profile": [[47.7, 1.83], [56.2, 1.83], [57.2, 2.6], [63.5, 2.6], [66.5, 2.2], [68.5, 1.4], [69.6, 0.6], [70, 0]]},
+     {"colour": "#f2f2f2", "around": {"count": 2, "radius": 4.27, "turnDeg": 0},
+      "profile": [[0, 1.83], [44.0, 1.83], [46.2, 1.4], [47.3, 0.8], [47.7, 0]]}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "falcon-9", "name": "Falcon 9", "group": "SpaceX", "kind": "built", "heightM": 70, "widthM": 5.2,
+   "parts": [
+     {"colour": "#f2f2f2", "profile": [[0, 1.83], [41.2, 1.83]]},
+     {"colour": "#242424", "profile": [[41.2, 1.84], [47.7, 1.84]]},
+     {"colour": "#f2f2f2", "profile": [[47.7, 1.83], [56.2, 1.83], [57.2, 2.6], [63.5, 2.6], [66.5, 2.2], [68.5, 1.4], [69.6, 0.6], [70, 0]]}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "n1", "name": "N1", "group": "USSR and Russia", "kind": "built", "heightM": 105.3, "widthM": 17,
+   "parts": [
+     {"colour": "#e8e8e3", "profile": [[0, 8.5], [30.1, 5.15], [50.6, 3.8], [62.1, 3.0], [72.0, 2.9], [86.0, 2.1], [94.0, 1.3], [96.0, 0.45], [104.6, 0.15], [105.3, 0]]}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "energia-buran", "name": "Energia and Buran", "group": "USSR and Russia", "kind": "built", "heightM": 58.8, "widthM": 23.92,
+   "parts": [
+     {"colour": "#c47d3a", "profile": [[0, 3.875], [52.0, 3.875], [55.5, 3.0], [57.6, 1.8], [58.8, 0]]},
+     {"colour": "#e6e4df", "around": {"radius": 6.2, "anglesDeg": [55, 125, 235, 305]},
+      "profile": [[0, 1.96], [36.5, 1.96], [38.5, 1.3], [39.5, 0.3], [39.5, 0]]},
+     {"colour": "#f4f4f2", "at": [7.6, 0], "profile": [[3.0, 2.0], [4.0, 2.8], [33.5, 2.8], [36.6, 2.1], [38.6, 1.0], [39.4, 0]]},
+     {"colour": "#f4f4f2", "plate": {"along": "z", "at": [6.4, 0], "thickness": 0.6,
+      "points": [[-11.96, 3.6], [11.96, 3.6], [3.2, 24.0], [-3.2, 24.0]]}},
+     {"colour": "#f4f4f2", "plate": {"along": "x", "at": [0, 0], "thickness": 0.5,
+      "points": [[10.2, 3.2], [10.2, 12.4], [17.9, 5.6], [17.9, 3.2]]}}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "proton-m", "name": "Proton-M", "group": "USSR and Russia", "kind": "built", "heightM": 58.2, "widthM": 7.4,
+   "parts": [
+     {"colour": "#ededeb", "profile": [[0, 2.05], [42.3, 2.05], [42.3, 2.175], [53.4, 2.175], [55.9, 1.7], [57.4, 0.9], [58.2, 0]]},
+     {"colour": "#e1e1dd", "around": {"count": 6, "radius": 2.9, "turnDeg": 0},
+      "profile": [[0, 0.8], [18.0, 0.8], [19.0, 0.4], [19.5, 0]]}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "angara-a5", "name": "Angara A5", "group": "USSR and Russia", "kind": "built", "heightM": 55.4, "widthM": 8.86,
+   "parts": [
+     {"colour": "#ececea", "profile": [[0, 1.45], [25.1, 1.45], [26.1, 1.8], [33.0, 1.8], [34.0, 2.175], [50.8, 2.175], [53.4, 1.6], [54.8, 0.8], [55.4, 0]]},
+     {"colour": "#e0e0dc", "around": {"count": 4, "radius": 2.98, "turnDeg": 0},
+      "profile": [[0, 1.45], [23.0, 1.45], [25.0, 0.8], [25.7, 0]]}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "soyuz-2", "name": "Soyuz-2", "group": "USSR and Russia", "kind": "built", "heightM": 46.3, "widthM": 10.3,
+   "parts": [
+     {"colour": "#d9dcd2", "profile": [[0, 1.3], [6.0, 1.3], [13.0, 1.475], [27.8, 1.475], [27.8, 1.33], [34.5, 1.33], [35.0, 1.5], [40.0, 1.5], [42.6, 0.9], [43.4, 0.4], [45.8, 0.3], [46.3, 0]]},
+     {"colour": "#d9dcd2", "around": {"count": 4, "radius": 3.81, "turnDeg": 45},
+      "profile": [[0, 1.34], [14.0, 0.9], [19.6, 0.2], [19.6, 0]]}
+   ], "credit": "Simplified, from published dimensions"},
+  {"id": "iss", "name": "International Space Station", "group": "Space station", "kind": "glb", "lengthM": 108.5,
+   "url": "https://raw.githubusercontent.com/nasa/NASA-3D-Resources/master/3D%20Models/International%20Space%20Station%20(ISS)%20(B)/International%20Space%20Station%20(ISS)%20(B).glb",
+   "drop": ["bendedtru1", "bendedtru2", "bendedtru3", "bendedtrus", "pCylinder1", "pCylinder2", "pCylinder8"],
+   "fit": "longest", "credit": "NASA 3D Resources"}
+]

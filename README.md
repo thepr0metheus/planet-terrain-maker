@@ -50,8 +50,14 @@ the same library to every device on your network.
   (its name in the row under the camera bar, or a click on it); its label carries it over another point,
   and while it moves its projection shows on the ground with its height over it. A click on one makes
   the view turn about it. A saved model keeps its asteroids, where they stood and as high. The shapes
-  are fetched by the server the first time and kept (`app/asteroids.py`); the lists are made by
+  are fetched by the server the first time and kept (`app/shapes.py`); the lists are made by
   `tools/asteroids.py`.
+- **Comets and spacecraft at their real size** too, each under a button of its own and placed the same
+  way: five comets seen up close (67P/Churyumov–Gerasimenko, 9P/Tempel 1, 103P/Hartley 2, 81P/Wild 2,
+  1P/Halley), and eleven rockets with the ISS. Saturn V, the Space Shuttle and the station are NASA's own
+  models; SLS, Starship and Super Heavy, Falcon 9 and Falcon Heavy, N1, Energia and Buran, Proton-M,
+  Angara A5 and Soyuz-2 are simple shapes drawn from their published dimensions (`vehicle-shapes.js`,
+  `web/data/vehicles.json`).
 - **Check the heights** with a ruler carried across the model (`height-ruler.js`). Its foot stays at
   the level of its "0"; beside its top it reads the height above the zero on the model and in the
   data, and says why the two differ: a place raised on the model, calm water, or the model's grid.
@@ -112,9 +118,9 @@ or behind a reverse proxy of your own that signs people in.
   the map without moving it, and on Earth the map shows Sentinel-2 cloudless 2025 while a place is
   framed. **Make this the start** keeps where a world's map opens, for every device.
 - **The camera bar** over the model: **Around the model** and **Free flight**, then **To the centre**,
-  **Whole model**, the **Height ruler**, the **Asteroid** button and the panel. Around the model the
-  wheel or two fingers come as close as a twelfth of the model's width, and R and F move the camera up
-  and down.
+  **Whole model**, the **Height ruler**, the **Asteroid**, **Comet** and **Spacecraft** buttons and the
+  panel. Around the model the wheel or two fingers come as close as a twelfth of the model's width, and
+  R and F move the camera up and down.
 - **Free flight**: the mouse looks; W and S (or ↑ and ↓) fly forward and back, A and D (or ← and →)
   turn, Q and E slide, Shift climbs and Ctrl descends, R and F tilt the view, Space (or **Level**)
   brings it back to the horizon. Two short quick taps of a key hold its move on; one more press, or a
@@ -160,7 +166,7 @@ cookies, and the server never fetches an address a user typed:
 | `places.py` | Nominatim search and place names, one request a second, answers kept |
 | `buildings.py` | OpenStreetMap buildings through Overpass, mirrors in turn, answers kept |
 | `pictures.py` | smaller copies of saved pictures for devices that hold less (`?most=4096`) |
-| `asteroids.py` | asteroid shapes from NASA, JAXA, the PDS radar models and DAMIT, fetched once and kept on disk (`data/cache/asteroids`) |
+| `shapes.py` | the shapes of asteroids, comets and spacecraft, from NASA, JAXA, the PDS and DAMIT, fetched once and kept on disk (`data/cache/asteroids`) |
 | `library.py` | the saved models in `data/models`; removed ones wait 30 days in `data/trash` |
 | `keys.py` | the OpenTopography key, set on the page and kept in `data/keys` (mode 600), never sent back |
 | `settings.py` | where each world's map opens and your set of flight speeds, the same on every device |
@@ -204,7 +210,11 @@ Planetary Nomenclature; OpenStreetMap contributors (Nominatim, Overpass). Astero
 Resources (OSIRIS-REx, Hayabusa, NEAR Shoemaker, Dawn); JAXA Hayabusa2 (Ryugu, Watanabe et al. 2019);
 the PDS Small Bodies Node radar shape models (Hudson, Ostro et al.); DAMIT, the Database of Asteroid
 Models from Inversion Techniques (Ďurech et al. 2010, CC BY 4.0); diameters from JPL's Small-Body
-Database. Models made from them follow each provider's terms. three.js and Leaflet: MIT and BSD licences (`web/vendor/*/LICENSE`).
+Database. Comet shapes: the PDS Small Bodies Node (ESA Rosetta, Jorda et al. 2016; Deep Impact and EPOXI,
+Thomas et al. 2013; Stardust; Giotto and Vega, Stooke). Spacecraft: NASA 3D Resources (Saturn V, the Space
+Shuttle, the ISS); the other rockets are drawn from their published dimensions. Models made from them follow
+each provider's terms. three.js and Leaflet: MIT and BSD licences (`web/vendor/*/LICENSE`); the Draco
+decoder: Apache 2.0 (`web/vendor/three/draco/README.md`).
 
 ## License
 

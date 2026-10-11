@@ -285,8 +285,8 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class AsteroidShapesTest(unittest.TestCase):
-    """The shapes of asteroids: only the two lists can be asked for; each file is fetched once."""
+class ShapeFilesTest(unittest.TestCase):
+    """The shapes of asteroids, comets and spacecraft: only their lists can be asked for; each file is fetched once."""
 
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
@@ -297,6 +297,11 @@ class AsteroidShapesTest(unittest.TestCase):
             "AsteroidModel/101/shape.obj": Answer(b"v 1 2 3\nv 2 3 4\nv 3 4 5\nf 1 2 3\n", "text/plain"),
             "AsteroidModel/102/shape.obj": Answer(b"<html>not a shape</html>", "text/html"),
             "AsteroidModel/103/shape.obj": FetchError("HTTP 500", 500),
+            "hartley2_2012_cart.obj": Answer(b"v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n", "text/plain"),
+            "cg_mspcd_shap2_024k_cart.wrl": Answer(b"#VRML V2.0 utf8\nShape { coord Coordinate { point [ 0 0 0 ] } }", "text/plain"),
+            "1682q1halley.tab": Answer(b"  360  -90      8.800000\n  360  -85      8.800000\n", "text/plain"),
+            "tempel1_2012_cart.obj": Answer(b"#VRML V2.0 utf8\nnot what the list says", "text/plain"),
+            "Saturn%20V.glb": Answer(b"glTF\x02\x00\x00\x00 a rocket", "model/gltf-binary"),
         })
         self.client = create_app(Path(self.dir.name), fetcher=self.fetcher).test_client()
 
@@ -323,3 +328,19 @@ class AsteroidShapesTest(unittest.TestCase):
         self.assertEqual(self.client.get("/api/asteroids/damit/102").status_code, 502, "a page, not a shape")
         self.assertFalse((Path(self.dir.name) / "cache" / "asteroids" / "damit-102.obj").exists())
         self.assertEqual(self.client.get("/api/asteroids/damit/103").status_code, 502)
+
+    def test_comets_in_their_three_kinds_of_file(self):
+        for comet, kept in (("hartley-2", "comet-hartley-2.obj"), ("67p", "comet-67p.wrl"), ("halley", "comet-halley.grid")):
+            with self.subTest(comet=comet):
+                answer = self.client.get(f"/api/comets/{comet}")
+                self.assertEqual((answer.status_code, answer.mimetype), (200, "text/plain"))
+                self.assertTrue((Path(self.dir.name) / "cache" / "asteroids" / kept).is_file())
+        self.assertEqual(self.client.get("/api/comets/tempel-1").status_code, 502, "VRML where the list says OBJ")
+        self.assertEqual(self.client.get("/api/comets/bennu").status_code, 404, "an asteroid is no comet")
+
+    def test_nasa_s_spacecraft_and_none_the_page_draws_itself(self):
+        answer = self.client.get("/api/vehicles/saturn-v")
+        self.assertEqual((answer.status_code, answer.mimetype), (200, "model/gltf-binary"))
+        self.assertTrue((Path(self.dir.name) / "cache" / "asteroids" / "vehicle-saturn-v.glb").is_file())
+        self.assertEqual(self.client.get("/api/vehicles/falcon-9").status_code, 404, "drawn by the page: no file")
+        self.assertEqual(self.client.get("/api/vehicles/..%2Fsecret").status_code, 404)

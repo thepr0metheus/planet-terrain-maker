@@ -71,6 +71,15 @@ The errors the page reported lately, from any device.
 - `last` (query, integer, optional): How many, the newest last; 50 when left out, at most 300.
 - 200: {errors: [{time, message, where, page, version, details, agent, automated, stack}]}.
 
+## GET `/api/comets/{comet_id}`
+
+The shape of a comet seen up close, by its id in web/data/comets.json, fetched once and kept on disk.
+
+- `comet_id` (path, string, required)
+- 200: The shape: vertices and facets as OBJ or VRML text, or Halley's table of radii by longitude and latitude.
+- 404: No such comet in the list.
+- 502: Where the shape lives did not give it, or gave something else.
+
 ## GET `/api/earth/heights`
 
 Heights of a region on Earth from Copernicus DEM: 30 m (90 m where 30 m is not released, or big regions).
@@ -329,6 +338,15 @@ Layers: earth-photo (Esri World Imagery), earth-s2-2025 (Sentinel-2 cloudless 20
 - 200: The tile (JPEG or PNG).
 - 404: No such layer, or the layer has no such tile.
 - 502: The layer's service failed, also when asked again twice.
+
+## GET `/api/vehicles/{vehicle_id}`
+
+NASA's model of a spacecraft, by its id in web/data/vehicles.json, fetched once and kept on disk.
+
+- `vehicle_id` (path, string, required)
+- 200: NASA's model of the spacecraft as GLB (Draco-compressed for some).
+- 404: No such model: not in the list, or one the page draws itself.
+- 502: Where the model lives did not give it, or gave something else.
 
 ## GET `/healthz`
 

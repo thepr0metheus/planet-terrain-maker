@@ -10,7 +10,7 @@ import { TurnDials } from './turn-dials.js';
 import { HeightProbe } from './height-probe.js';
 import { HeightRuler } from './height-ruler.js';
 import { AsteroidsOnModel } from './asteroid-on-model.js';
-import { AsteroidLists, AsteroidSearch, entryOf } from './asteroid-search.js';
+import { AsteroidLists, AsteroidSearch, ObjectChoices, entryOf } from './asteroid-search.js';
 import { objZipOf, stlOf, threeMfOf } from './exporters.js';
 import { exportScene, glbOf, usdzOf } from './export-scene.js';
 import { formatDistance } from './map-view.js';
@@ -25,6 +25,8 @@ import { reportError } from './client-errors.js';
 import { CustomPicture } from './custom-picture.js';
 import { DetailedPictures } from './detailed-pictures.js';
 
+// The buttons of what can be put on the model, and whose tools each opens.
+const OBJECT_TOGGLES = [['asteroid-toggle', 'asteroid'], ['comet-toggle', 'comet'], ['vehicle-toggle', 'vehicle']];
 const $ = (id) => document.getElementById(id);
 
 // The model's name, or the one its places' names make (names.js) while it has none of its own.
@@ -106,6 +108,8 @@ export class ModelScreen {
       input: $('asteroid-search'), results: $('asteroid-results'), lists: this._asteroidLists, distance: formatDistance, say,
       onPick: (asteroid) => this._putAsteroid(asteroid),
     });
+    this._objectChoices = new ObjectChoices({ list: $('object-choices'), distance: formatDistance, onPick: (entry) => this._putAsteroid(entry) });
+    this._objectsShown = null;      // whose tools are open: 'asteroid', 'comet', 'vehicle', or null
     this.view.onFrame(() => {
       this._dials.place(); this._probe.place(); this._linePoints.place(); this._ruler.place(); this._asteroids.place();
     });
@@ -148,8 +152,8 @@ export class ModelScreen {
     this._restoring = false;
     this._asteroidsToRestore = saved;
     this._asteroidSearch.clear();
-    this._showAsteroidTools(false);
-    $('asteroid-toggle').hidden = model.isSplit;
+    this._showObjects(null);
+    for (const [id] of OBJECT_TOGGLES) $(id).hidden = model.isSplit;
     this.view.setMode('orbit');
     this.syncCameraButtons();
     this._fillPanel();
@@ -202,14 +206,28 @@ export class ModelScreen {
     return this._lastPick ?? (middle?.u != null ? { u: middle.u, v: middle.v } : { u: 0.5, v: 0.5 });
   }
 
-  // The asteroid's tools under the camera bar: its search, and a way to take it off the model. The
-  // list of asteroids opens by itself only while none is on the model: it would cover their chips.
-  _showAsteroidTools(on) {
-    $('asteroid-tools').hidden = !on;
-    $('asteroid-toggle').setAttribute('aria-pressed', String(on));
+  // The tools under the camera bar for what can be put on the model: a button each for asteroids (a
+  // search), comets and spacecraft (a short list), and with any of them the row of what stands on the
+  // model, the height of the one chosen and a way to take them all off. The asteroid list opens by
+  // itself only while nothing is on the model: it would cover their chips. kind: whose, or null.
+  async _showObjects(kind) {
+    this._objectsShown = kind;
+    $('asteroid-tools').hidden = !kind;
+    for (const [id, own] of OBJECT_TOGGLES) $(id).setAttribute('aria-pressed', String(own === kind));
+    $('asteroid-search-row').hidden = kind !== 'asteroid';
     this._asteroidControls();
-    if (on && !this._asteroids.items.length) this._asteroidSearch.open();
+    if (kind === 'asteroid' && !this._asteroids.items.length) this._asteroidSearch.open();
     else this._asteroidSearch.close();
+    if (kind !== 'comet' && kind !== 'vehicle') {
+      this._objectChoices.hide();
+      return;
+    }
+    try {
+      const lists = await this._asteroidLists.lists();
+      if (this._objectsShown === kind) this._objectChoices.show(kind === 'comet' ? lists.comets : lists.vehicles);
+    } catch (e) {
+      this._say(t('The list did not come: {why}', { why: e.message }), 'error');
+    }
   }
 
   async _putAsteroid(asteroid) {
@@ -385,7 +403,7 @@ export class ModelScreen {
     }
     $('orbit-centre').addEventListener('click', () => this.view.centre());
     $('ruler-toggle').addEventListener('click', () => this._showRuler(!this._ruler.on));
-    $('asteroid-toggle').addEventListener('click', () => this._showAsteroidTools($('asteroid-tools').hidden));
+    for (const [id, own] of OBJECT_TOGGLES) $(id).addEventListener('click', () => this._showObjects(this._objectsShown === own ? null : own));
     $('asteroid-remove').addEventListener('click', () => {
       this._asteroids.clear();
       this._asteroidSearch.clear();

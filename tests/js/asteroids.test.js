@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { equivalentDiameter, longestExtent, metresPerUnit, readObj, volumeOf } from '../../web/js/asteroid-shapes.js';
-import { asteroidWords, catalogueEntry, entryOf, findAsteroids, keyOf, topEntry } from '../../web/js/asteroid-search.js';
+import { equivalentDiameter, longestExtent, metresPerUnit, readObj, readRadiusGrid, readWrl, volumeOf } from '../../web/js/asteroid-shapes.js';
+import { asteroidWords, catalogueEntry, cometEntry, entryOf, findAsteroids, keyOf, topEntry, vehicleEntry } from '../../web/js/asteroid-search.js';
 import { RU } from '../../web/js/i18n-ru.js';
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
@@ -96,3 +96,52 @@ test('the lists the tool made: the top smallest first, the catalogue by number a
   assert.ok(damit.every(([number, name, km, model], i) => Number.isInteger(number) && typeof name === 'string' && km > 0
     && Number.isInteger(model) && !numbers.has(number) && (i === 0 || number > damit[i - 1][0])));
 });
+
+test('a comet\'s shape in VRML (Rosetta\'s 67P) and as a table of radii (Halley\'s)', () => {
+  const wrl = `#VRML V2.0 utf8
+# a tetrahedron
+Shape { geometry IndexedFaceSet { coord Coordinate { point [
+  0 0 0, 1 0 0,
+  0 1 0, 0 0 1 ] }
+  coordIndex [ 0 2 1 -1 0 1 3 -1 0 3 2 -1 1 2 3 -1 ] } }`;
+  const tetra = readWrl(wrl);
+  assert.equal(tetra.positions.length, 12);
+  assert.equal(tetra.indices.length, 12);
+  assert.ok(Math.abs(volumeOf(tetra) - 1 / 6) < 1e-12);
+  assert.throws(() => readWrl('#VRML V2.0 utf8\nShape { }'), /no facets/);
+  // a ball of radius 2 as a grid: longitudes 0 to 360 every 90 degrees, latitudes -90 to 90 every 45
+  const rows = [];
+  for (const lon of [360, 270, 180, 90, 0]) for (const lat of [-90, -45, 0, 45, 90]) rows.push(`${lon} ${lat} 2.0`);
+  const ball = readRadiusGrid(rows.join('\n'));
+  assert.equal(ball.positions.length / 3, 25);
+  assert.equal(ball.indices.length / 3, 4 * 4 * 2);
+  assert.ok(Math.abs(longestExtent(ball.positions) - 4) < 1e-6, '4 across');
+  assert.throws(() => readRadiusGrid('0 0 1\n90 0 1\n'), /could not be read/);
+});
+
+test('the comets of the list: smallest first, each read by its kind, its name in Russian', () => {
+  const comets = read('../../web/data/comets.json');
+  assert.equal(comets.length, 5);
+  assert.ok(comets.every((c, i) => c.lengthM > 0 && (i === 0 || c.lengthM >= comets[i - 1].lengthM)));
+  assert.ok(comets.every((c) => ['obj', 'wrl', 'grid'].includes(c.kind) && c.url.startsWith('https://') && c.metresPerUnit > 0 && c.credit));
+  assert.ok(comets.every((c) => c.name in RU), 'each name in Russian');
+});
+
+test('a comet and a spacecraft are saved by their id and said by their size', () => {
+  const comet = cometEntry({ id: '67p', name: '67P/Churyumov–Gerasimenko', lengthM: 5015 });
+  const rocket = vehicleEntry({ id: 'falcon-9', name: 'Falcon 9', kind: 'built', heightM: 70 });
+  const station = vehicleEntry({ id: 'iss', name: 'International Space Station', kind: 'glb', lengthM: 108.5 });
+  const lists = { top: TOP, catalogue: CATALOGUE, comets: [comet], vehicles: [rocket, station] };
+  for (const one of [comet, rocket, station]) {
+    const key = JSON.parse(JSON.stringify(keyOf(one)));
+    assert.deepEqual(Object.keys(key), ['source', 'id'], 'the id only: the list has the rest');
+    assert.equal(entryOf(key, lists), one);
+  }
+  assert.equal(entryOf({ source: 'vehicle', id: 'gone' }, lists), null);
+  assert.equal(entryOf({ source: 'comet', id: '67p' }, { top: TOP }), null, 'no comets loaded: none found');
+  const distance = (m) => `${m} m`;
+  assert.deepEqual(asteroidWords(rocket, distance), { name: 'Falcon 9', size: '70 m tall' });
+  assert.deepEqual(asteroidWords(station, distance), { name: 'International Space Station', size: '108.5 m long' });
+  assert.deepEqual(asteroidWords(comet, distance), { name: '67P/Churyumov–Gerasimenko', size: '5015 m long' });
+});
+

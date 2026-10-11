@@ -1,7 +1,9 @@
-// Asteroids put on the model at their real size, to see how big they are, as many as one likes: each
-// shape fetched through the server (app/asteroids.py keeps it), turned so that its own up is the
-// view's, scaled from metres to the model's millimetres, and hung over a point of the model's top, its
-// projection: on the ground there, or raised above it. They cast their shadows with the model's sun.
+// Asteroids, comets and spacecraft put on the model at their real size, to see how big they are, as
+// many as one likes: each shape fetched through the server (app/shapes.py keeps it) or, for a rocket
+// without a model of NASA's, drawn from its dimensions (vehicle-shapes.js); turned so that its own up
+// is the view's, scaled from metres to the model's millimetres, and hung over a point of the model's
+// top, its projection: on the ground there, or raised above it. They cast their shadows with the
+// model's sun. Below, "an asteroid" is any of them.
 //
 // Over the view, for each: a label above it that says what it is and how big, and carries it over
 // another point (carry.js: the point under the label, kept as far below it as when it was grabbed).
@@ -19,8 +21,9 @@ import * as THREE from '../vendor/three/three.module.js';
 import { GLTFLoader } from '../vendor/three/addons/GLTFLoader.js';
 import { disposeTree } from './dispose.js';
 import { CarriedPoint } from './carry.js';
-import { metresPerUnit, readObj } from './asteroid-shapes.js';
+import { metresPerUnit, readObj, readRadiusGrid, readWrl } from './asteroid-shapes.js';
 import { asteroidWords, keyOf } from './asteroid-search.js';
+import { VehicleShapes } from './vehicle-shapes.js';
 import { number, t } from './i18n.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -33,25 +36,57 @@ const GATEWAY = [502, 503, 504];          // a proxy's answers for a server that
 const AGAIN_MS = 1500;
 
 // ---------- a shape ----------
-// The builders of a shape hold no state of their own: functions.
+// The builders of a shape hold no state of their own: functions; the vehicles' builder keeps the
+// glTF loader with its Draco decoder, made once.
 
-// The shape of an asteroid as a three.js object in metres, y up, its lowest point at 0 and its middle
-// over the origin.
-async function fetchShape(asteroid) {
-  const url = asteroid.source === 'top' ? `/api/asteroids/top/${encodeURIComponent(asteroid.id)}` : `/api/asteroids/damit/${asteroid.model}`;
-  let response = await fetch(url);
-  // the proxy in front of the server answers so while the server restarts (a new version): once more
-  if (GATEWAY.includes(response.status)) {
-    await new Promise((resolve) => setTimeout(resolve, AGAIN_MS));
-    response = await fetch(url);
+const VEHICLES = new VehicleShapes();
+const COMET = 0x4a4642;         // a comet's nucleus: darker than coal (it reflects some 4 % of the light)
+const READERS = { obj: readObj, wrl: readWrl, grid: readRadiusGrid };
+
+// Where each list's shapes come from (null: drawn here, nothing to fetch), and how one is read into a
+// three.js object in metres, y up.
+const SHAPES = {
+  top: {
+    url: (a) => `/api/asteroids/top/${encodeURIComponent(a.id)}`,
+    read: async (answer, a) => (a.kind === 'glb' ? glbShape(await answer.arrayBuffer(), a.metresPerUnit)
+      : bodyShape(readObj(await answer.text()), a.metresPerUnit, ROCK)),
+  },
+  damit: {
+    url: (a) => `/api/asteroids/damit/${a.model}`,
+    read: async (answer, a) => {
+      const read = readObj(await answer.text());
+      return bodyShape(read, metresPerUnit(read, a.diameterKm), ROCK);
+    },
+  },
+  comet: {
+    url: (a) => `/api/comets/${encodeURIComponent(a.id)}`,
+    read: async (answer, a) => bodyShape(READERS[a.kind](await answer.text()), a.metresPerUnit, COMET),
+  },
+  vehicle: {
+    url: (a) => (a.kind === 'glb' ? `/api/vehicles/${encodeURIComponent(a.id)}` : null),
+    read: async (answer, a) => (answer ? VEHICLES.fromGlb(await answer.arrayBuffer(), a) : VEHICLES.build(a)),
+  },
+};
+
+// The shape of what is put on the model as a three.js object in metres, y up, its lowest point at 0
+// and its middle over the origin.
+async function fetchShape(entry) {
+  const source = SHAPES[entry.source];
+  const url = source.url(entry);
+  let answer = null;
+  if (url) {
+    answer = await fetch(url);
+    // the proxy in front of the server answers so while the server restarts (a new version): once more
+    if (GATEWAY.includes(answer.status)) {
+      await new Promise((resolve) => setTimeout(resolve, AGAIN_MS));
+      answer = await fetch(url);
+    }
+    if (!answer.ok) {
+      const said = (await answer.json().catch(() => ({}))).error;
+      throw new Error(said ?? t('The server did not answer ({status}): try again in a moment.', { status: `HTTP ${answer.status}` }));
+    }
   }
-  if (!response.ok) {
-    const said = (await response.json().catch(() => ({}))).error;
-    throw new Error(said ?? t('The server did not answer ({status}): try again in a moment.', { status: `HTTP ${response.status}` }));
-  }
-  const inner = asteroid.source === 'top' && asteroid.kind === 'glb'
-    ? await glbShape(await response.arrayBuffer(), asteroid.metresPerUnit)
-    : objShape(await response.text(), asteroid);
+  const inner = await source.read(answer, entry);
   const shape = new THREE.Group();
   shape.add(inner);
   const box = new THREE.Box3().setFromObject(shape);
@@ -63,7 +98,7 @@ async function fetchShape(asteroid) {
   return shape;
 }
 
-// NASA's models: glTF, y up already, in metres divided by the scale of the file's name.
+// NASA's models of asteroids: glTF, y up already, in metres divided by the scale of the file's name.
 async function glbShape(buffer, metres) {
   const gltf = await new Promise((resolve, reject) => new GLTFLoader().parse(buffer, '', resolve, reject));
   gltf.scene.scale.setScalar(metres);
@@ -71,16 +106,13 @@ async function glbShape(buffer, metres) {
   return gltf.scene;
 }
 
-// Vertices and facets in the asteroid's own frame, z up: in km (the top list), or in no unit, sized
-// by the catalogue's diameter.
-function objShape(text, asteroid) {
-  const read = readObj(text);
-  const metres = asteroid.source === 'top' ? asteroid.metresPerUnit : metresPerUnit(read, asteroid.diameterKm);
+// Vertices and facets in the body's own frame, z up, at `metres` a unit.
+function bodyShape(read, metres, colour) {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(read.positions, 3));
   geometry.setIndex(new THREE.BufferAttribute(read.indices, 1));
   geometry.computeVertexNormals();
-  const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: ROCK, roughness: 0.95, metalness: 0, side: THREE.DoubleSide }));
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: colour, roughness: 0.95, metalness: 0, side: THREE.DoubleSide }));
   mesh.rotation.x = -Math.PI / 2;                 // its z up is the view's y up
   mesh.scale.setScalar(metres);
   mesh.updateMatrixWorld(true);

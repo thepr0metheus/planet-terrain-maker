@@ -1,9 +1,10 @@
-// The asteroids one can put on a model (asteroid-on-model.js), and the search that finds them. The top
-// of the list: the most exact shapes, from spacecraft and radar (web/data/asteroids-top.json). Under it,
-// the DAMIT catalogue: shapes found from how an asteroid's light changes as it turns, each sized by its
-// diameter (asteroids-damit.json, about 8,800 of them, loaded when the search is first opened). Both
-// are made by tools/asteroids.py. A field and a list under it, as the craft search has; an empty field
-// shows the top.
+// What one can put on a model (asteroid-on-model.js), and how one picks it. Asteroids: the top of the
+// list, the most exact shapes from spacecraft and radar (web/data/asteroids-top.json), and under it the
+// DAMIT catalogue, shapes found from how an asteroid's light changes as it turns, each sized by its
+// diameter (asteroids-damit.json, about 8,800 of them); a field and a list under it, as the craft
+// search has, an empty field showing the top. Comets seen up close (comets.json) and spacecraft
+// (vehicles.json) are short lists, each under a button of its own: a plain list, no search. The
+// asteroid and comet lists are made by tools/asteroids.py, vehicles.json is written by hand.
 
 import { number, t } from './i18n.js';
 
@@ -13,20 +14,29 @@ const MOST_FOUND = 40;         // the catalogue's matches listed at most
 const normal = (text) => String(text).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
   .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
-// An entry of the top list, and of the catalogue (its rows are [number, name, diameterKm, modelId]).
+// An entry of the top list, of the catalogue (its rows are [number, name, diameterKm, modelId]), of the
+// comets and of the spacecraft.
 export const topEntry = (a) => ({ source: 'top', ...a });
 export const catalogueEntry = ([number, name, diameterKm, model]) => ({ source: 'damit', number, name, diameterKm, model });
+export const cometEntry = (c) => ({ source: 'comet', ...c });
+export const vehicleEntry = (v) => ({ source: 'vehicle', ...v });
 
-// What a saved model keeps of an asteroid to find it again: the top's id, or the catalogue's row.
+// What a saved model keeps of what stands on it, to find it again: an id in its list, or the
+// catalogue's row (the catalogue is too long to look the number up in).
+const KEYS = {
+  top: (a) => ({ source: 'top', id: a.id }),
+  comet: (a) => ({ source: 'comet', id: a.id }),
+  vehicle: (a) => ({ source: 'vehicle', id: a.id }),
+  damit: (a) => ({ source: 'damit', number: a.number, name: a.name, diameterKm: a.diameterKm, model: a.model }),
+};
 export function keyOf(a) {
-  return a.source === 'top' ? { source: 'top', id: a.id }
-    : { source: 'damit', number: a.number, name: a.name, diameterKm: a.diameterKm, model: a.model };
+  return KEYS[a.source](a);
 }
 
-// The asteroid a saved key names, from the lists (AsteroidLists.lists), or null when the lists have it
-// no more.
-export function entryOf(key, { top }) {
-  if (key?.source === 'top') return top.find((a) => a.id === key.id) ?? null;
+// What a saved key names, from the lists (AsteroidLists.lists), or null when the lists have it no more.
+export function entryOf(key, { top, comets = [], vehicles = [] }) {
+  const listed = { top, comet: comets, vehicle: vehicles }[key?.source];
+  if (listed) return listed.find((a) => a.id === key.id) ?? null;
   if (key?.source === 'damit' && key.model > 0 && key.diameterKm > 0) return catalogueEntry([key.number, key.name ?? '', key.diameterKm, key.model]);
   return null;
 }
@@ -46,15 +56,17 @@ export function findAsteroids({ top, catalogue }, text, { nameOf = (a) => a.name
   return { top: top.filter(has), found };
 }
 
-// An asteroid in words: its name, and its size as its list knows it (the top: its length; the catalogue:
-// the diameter of a ball of its volume). distance(m): a distance in words.
+// What stands on the model in words: its name, and its size as its list knows it (an asteroid of the
+// top and a comet: its length; one of the catalogue: the diameter of a ball of its volume; a rocket: its
+// height; the station: its length). distance(m): a distance in words.
 export function asteroidWords(a, distance) {
-  if (a.source === 'top') return { name: t(a.name), size: t('{d} long', { d: distance(a.lengthM) }) };
+  if (a.source === 'vehicle' && a.heightM) return { name: t(a.name), size: t('{d} tall', { d: distance(a.heightM) }) };
+  if (a.source !== 'damit') return { name: t(a.name), size: t('{d} long', { d: distance(a.lengthM) }) };
   const name = a.name ? `(${a.number}) ${a.name}` : `(${a.number})`;
   return { name, size: t('{d} in diameter', { d: distance(a.diameterKm * 1000) }) };
 }
 
-// Both lists, loaded once.
+// The four lists, loaded once.
 export class AsteroidLists {
   constructor(load = (url) => fetch(url).then((r) => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -65,8 +77,10 @@ export class AsteroidLists {
   }
 
   async lists() {
-    this._lists ??= Promise.all([this._load('data/asteroids-top.json'), this._load('data/asteroids-damit.json')])
-      .then(([top, damit]) => ({ top: top.map(topEntry), catalogue: damit.map(catalogueEntry) }))
+    this._lists ??= Promise.all(['asteroids-top', 'asteroids-damit', 'comets', 'vehicles'].map((name) => this._load(`data/${name}.json`)))
+      .then(([top, damit, comets, vehicles]) => ({
+        top: top.map(topEntry), catalogue: damit.map(catalogueEntry), comets: comets.map(cometEntry), vehicles: vehicles.map(vehicleEntry),
+      }))
       .catch((e) => {
         this._lists = null;            // asked again next time
         throw e;
@@ -168,3 +182,39 @@ export class AsteroidSearch {
     this._onPick(asteroid);
   }
 }
+
+// A short list to pick from: the comets, or the spacecraft by their group. A button for each, its name
+// and its size, as the asteroid search lists them.
+export class ObjectChoices {
+  // list: the element the buttons go in. distance(m): a distance in words. onPick(entry).
+  constructor({ list, distance, onPick }) {
+    this._list = list;
+    this._distance = distance;
+    this._onPick = onPick;
+  }
+
+  // entries in their order; a heading before each new group (the spacecraft's), none without groups.
+  show(entries) {
+    const rows = [];
+    let group = null;
+    entries.forEach((entry, k) => {
+      if (entry.group && entry.group !== group) {
+        group = entry.group;
+        rows.push(Dom.el('p', { class: 'group' }, t(group)));
+      }
+      const words = asteroidWords(entry, this._distance);
+      const size = entry.kind === 'built' ? t('{d} tall, a simple shape', { d: this._distance(entry.heightM) }) : words.size;
+      const button = Dom.el('button', { type: 'button', id: `object-${k}` },
+        Dom.el('span', { class: 'name' }, words.name), Dom.el('span', { class: 'detail' }, size));
+      button.addEventListener('click', () => this._onPick(entry));
+      rows.push(button);
+    });
+    this._list.replaceChildren(...rows);
+    this._list.hidden = false;
+  }
+
+  hide() {
+    this._list.hidden = true;
+  }
+}
+

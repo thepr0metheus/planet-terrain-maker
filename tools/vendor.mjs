@@ -1,5 +1,6 @@
 // Copies the libraries the page carries from node_modules into web/vendor: three.js (the 3D view,
-// GLB and USDZ export, zip, and GLB loading for the asteroids' shapes) and Leaflet (the map). The page loads nothing from other sites, so these
+// GLB and USDZ export, zip, and GLB loading for the asteroids' shapes and NASA's spacecraft, with the
+// Draco decoder in JavaScript: the page's CSP allows no WebAssembly) and Leaflet (the map). The page loads nothing from other sites, so these
 // are files of our own; npm only says which version. After a version change: npm install, npm run
 // vendor, and commit web/vendor.
 //
@@ -19,6 +20,7 @@ const THREE_ADDONS = {
   'exporters/GLTFExporter.js': 'GLTFExporter.js',
   'exporters/USDZExporter.js': 'USDZExporter.js',
   'libs/fflate.module.js': 'fflate.module.js',
+  'loaders/DRACOLoader.js': 'DRACOLoader.js',
   'loaders/GLTFLoader.js': 'GLTFLoader.js',
   'utils/BufferGeometryUtils.js': 'BufferGeometryUtils.js',
   'utils/SkeletonUtils.js': 'SkeletonUtils.js',
@@ -41,6 +43,10 @@ mkdirSync(join(TO, 'three', 'addons'), { recursive: true });
 for (const file of ['three.module.js', 'three.core.js']) cpSync(join(FROM, 'three', 'build', file), join(TO, 'three', file));
 cpSync(join(FROM, 'three', 'LICENSE'), join(TO, 'three', 'LICENSE'));
 for (const [from, to] of Object.entries(THREE_ADDONS)) copyAddon(from, to);
+// the glTF build of the decoder, in JavaScript (Apache-2.0, as its README says)
+mkdirSync(join(TO, 'three', 'draco'), { recursive: true });
+cpSync(join(FROM, 'three', 'examples', 'jsm', 'libs', 'draco', 'gltf', 'draco_decoder.js'), join(TO, 'three', 'draco', 'draco_decoder.js'));
+cpSync(join(FROM, 'three', 'examples', 'jsm', 'libs', 'draco', 'README.md'), join(TO, 'three', 'draco', 'README.md'));
 
 mkdirSync(join(TO, 'leaflet'), { recursive: true });
 for (const file of ['leaflet-src.esm.js', 'leaflet.css']) cpSync(join(FROM, 'leaflet', 'dist', file), join(TO, 'leaflet', file));

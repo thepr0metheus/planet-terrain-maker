@@ -16,7 +16,6 @@ from pathlib import Path
 from flask import Flask, Response, jsonify, request, send_from_directory
 
 from .apispec import Param, api, build
-from .asteroids import AsteroidShapes, BadShape, UnknownShape
 from .buildings import BuildingsUnavailable, Overpass
 from .copdem import CopError, CopernicusAws
 from .earth import Copernicus, KeyNeeded, SourceFailed
@@ -28,6 +27,7 @@ from .packages import InstalledPackages
 from .pictures import PictureSizes
 from .places import Nominatim
 from .settings import Refused as SettingRefused, Settings
+from .shapes import BadShape, ShapeFiles, UnknownShape
 from .picture_sources import InvalidSource, PictureSources, SourceStoreError
 from .detail_tiles import DetailTiles, InvalidDetail
 from .planets import PLANETS, NoHeights, RegionError
@@ -206,7 +206,8 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
     detail_tiles = DetailTiles(data_dir / "picture-tiles")
     client_errors = ClientErrors(data_dir / "client-errors.jsonl")
     pictures = PictureSizes(data_dir / "cache" / "pictures", log=log)
-    asteroids = AsteroidShapes(fetcher, data_dir / "cache" / "asteroids", WEB / "data" / "asteroids-top.json", log=log)
+    shapes = ShapeFiles(fetcher, data_dir / "cache" / "asteroids", {name: WEB / "data" / f"{file}.json" for name, file in
+                        (("top", "asteroids-top"), ("comets", "comets"), ("vehicles", "vehicles"))}, log=log)
     installed = installed or InstalledPackages(vendor_versions=WEB / "vendor" / "VERSIONS.json")
 
     @app.errorhandler(BadRequest)
@@ -290,14 +291,14 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
         response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
         return response
 
-    # A shape of an asteroid, from one of its two lists; it does not change, so it is kept long.
+    # A shape of an asteroid, a comet or a spacecraft, from its list; it does not change, so it is kept long.
     def shape(get, what):
         try:
             body, content_type = get()
         except UnknownShape as e:
             return _error(404, str(e))
         except (FetchError, BadShape) as e:
-            log(f"asteroid {what}: {e}")
+            log(f"shape {what}: {e}")
             return _error(502, f"{what}: {e}")
         response = Response(body, mimetype=content_type)
         response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
@@ -308,14 +309,29 @@ def create_app(data_dir: Path, fetcher: Fetcher | None = None, opentopo_key: str
                     404: "No such asteroid in the list.", 502: "Where the shape lives did not give it, or gave something else."})
     def asteroid_top(asteroid_id):
         """One of the best known shapes of asteroids, by its id in web/data/asteroids-top.json, fetched once and kept on disk."""
-        return shape(lambda: asteroids.top(asteroid_id), asteroid_id)
+        return shape(lambda: shapes.listed("top", asteroid_id), asteroid_id)
 
     @app.get("/api/asteroids/damit/<int:model_id>")
     @api(responses={200: "The shape: vertices and facets as OBJ text, in no particular unit (the page sizes it).",
                     404: "No such model.", 502: "DAMIT did not give it, or gave something else."})
     def asteroid_damit(model_id):
         """A shape of the DAMIT catalogue, by its model's number in web/data/asteroids-damit.json, fetched once and kept on disk."""
-        return shape(lambda: asteroids.damit(model_id), f"DAMIT {model_id}")
+        return shape(lambda: shapes.damit(model_id), f"DAMIT {model_id}")
+
+    @app.get("/api/comets/<comet_id>")
+    @api(responses={200: "The shape: vertices and facets as OBJ or VRML text, or Halley's table of radii by longitude and latitude.",
+                    404: "No such comet in the list.", 502: "Where the shape lives did not give it, or gave something else."})
+    def comet(comet_id):
+        """The shape of a comet seen up close, by its id in web/data/comets.json, fetched once and kept on disk."""
+        return shape(lambda: shapes.listed("comets", comet_id), comet_id)
+
+    @app.get("/api/vehicles/<vehicle_id>")
+    @api(responses={200: "NASA's model of the spacecraft as GLB (Draco-compressed for some).",
+                    404: "No such model: not in the list, or one the page draws itself.",
+                    502: "Where the model lives did not give it, or gave something else."})
+    def vehicle(vehicle_id):
+        """NASA's model of a spacecraft, by its id in web/data/vehicles.json, fetched once and kept on disk."""
+        return shape(lambda: shapes.listed("vehicles", vehicle_id), vehicle_id)
 
     @app.get("/api/earth/heights")
     @api(*BOX, CELLS, Param("source", "string", "aws: Copernicus DEM read from AWS Open Data, no key; opentopography "
