@@ -1,0 +1,15 @@
+[package]
+name = "wire"
+description = "HTTP/1.1 on a stream of bytes, and multipart bodies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+httparse.workspace = true
+rules.workspace = true
+
+[lints]
+workspace = true

@@ -112,22 +112,30 @@ export class PolygonOutline {
 
   // Whether two edges that do not share a point cross.
   crossesItself() {
-    const p = this.points, n = p.length;
-    const side = (a, b, c) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
-    for (let i = 0; i < n; i++) {
-      const a = p[i], b = p[(i + 1) % n];
-      for (let j = i + 2; j < n; j++) {
-        if (i === 0 && j === n - 1) continue;       // neighbours across the closing edge
-        const c = p[j], d = p[(j + 1) % n];
-        if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return true;
-      }
-    }
-    return false;
+    return firstCrossing(this.points) !== null;
   }
 
   toJSON() {
     return { kind: 'polygon', points: this.points.map(([x, y]) => [Math.round(x * 100) / 100, Math.round(y * 100) / 100]) };
   }
+}
+
+// The first two sides of a line through `points` that cross, as [i, j]: side i runs from point i to
+// point i + 1, and a closed line's last side back to its first point. null when none do. Sides that
+// only touch, or share a point, do not cross. A contour that crosses itself is refused by this test,
+// and the smooth line through a contour is kept out of itself by it (smooth.js).
+export function firstCrossing(points, closed = true) {
+  const n = points.length, sides = closed ? n : n - 1;
+  const side = (a, b, c) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+  for (let i = 0; i < sides; i++) {
+    const a = points[i], b = points[(i + 1) % n];
+    for (let j = i + 2; j < sides; j++) {
+      if (closed && i === 0 && j === n - 1) continue;       // neighbours across the closing side
+      const c = points[j], d = points[(j + 1) % n];
+      if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return [i, j];
+    }
+  }
+  return null;
 }
 
 // Which of the points (xs[i], y) are inside the polygon `points` (even-odd), into `out`: where the

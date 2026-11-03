@@ -3,8 +3,8 @@
 /*
  * The small tools the page draws with: a way to make elements without ever parsing text as
  * HTML (Dom), icons drawn in code (Icon), a message with a way back (Toast), the search box (Search),
- * the header's two blocks of buttons (HeaderBlocks) and the light that follows the mouse over a
- * surface (Glow).
+ * the pinned panel under the header (Dock), the names of the page's two blocks (BlockNames) and the
+ * light that follows the mouse over a surface (Glow).
  */
 
 class Dom {
@@ -163,84 +163,137 @@ class Search {
   }
 }
 
-class HeaderBlocks {
+class Dock {
   /**
-   * The header's buttons in two blocks — the scheme ui-home-style.md, its part on the header's buttons. The regular ones go
-   * up with the header. The pinned ones — the page's main action, the way out of a mode, the way back to a list, the
-   * search — stay in sight: while the header's row of buttons is on the screen they stand last in it, and once the row
-   * has left the window, a glass strip at the window's top holds them, the page's mark at its left (a press on it
-   * goes back to the top).
+   * The pinned panel under the header — the scheme ui-home-style.md, its part on the header and the panel. The header goes up
+   * with the page; the panel sticks to the top of the window and holds what the page keeps in sight: its search and its
+   * main buttons. Once the header is out of the window, the page's mark (a press goes to the top) and the way to the home's
+   * services stand at the panel's left: that way is needed in any place of the page.
    *
-   *   const blocks = new HeaderBlocks(document.querySelector('header.top'), toolsElement, upTitle);
-   *   blocks.set(regular, pinned);  // nodes, as often as the buttons change
+   *   const dock = new Dock(document.getElementById('dock'), document.querySelector('header.top'), upTitle);
+   *   dock.set(buttons, services);    // nodes, as often as they change; `services`: the way to the services, or null
+   *   dock.finder(fieldBox, lens);    // the search's box, and the magnifier a narrow screen shows in its place
    *
-   * The words a person reads — the mark's hint, the magnifier's — are the page's: this file holds no language.
+   * The panel is hidden while it has no search and no button in sight (a hidden node is not one). On a narrow screen
+   * the search is the magnifier: a press on it opens the field over the whole panel (`finding`), and the field closes when
+   * it loses the focus or Enter is pressed. The panel's height and the room above it are `--pinbar-h`: what else sticks
+   * on the page stands under it; `--pinbar-space` is the room a jump to a heading leaves.
    *
-   * The pinned nodes are moved, not copied: a button keeps what it does and how it looks. While they are in the strip,
-   * a placeholder of their size keeps the header's row as it was, so that nothing under it jumps. A page that makes
-   * no HeaderBlocks keeps its one row as before.
+   * The words a person reads — the mark's hint, the buttons' names — are the page's: this file holds no language.
    */
-  constructor(top, tools, upTitle = 'Back to the top') {
-    this.tools = tools;
-    this.pinned = Dom.el('div', { class: 'tools-pinned' });
-    this.placeholder = Dom.el('span', { class: 'tools-pinned-place', 'aria-hidden': 'true' });
-    this.regular = [];
-    this.mark = Dom.el('button', { type: 'button', class: 'pinbar-mark', title: upTitle, 'aria-label': upTitle },
-      HeaderBlocks.mark(top));
-    this.slot = Dom.el('div', { class: 'pinbar-tools' });
-    this.strip = Dom.el('div', { class: 'pinbar', 'aria-hidden': 'true' },
-      Dom.el('div', { class: 'pinbar-box glass' }, this.mark, this.slot));
-    this.mark.addEventListener('click', () => window.scrollTo({ top: 0, behavior: HeaderBlocks.motion() }));
-    document.body.append(this.strip);
-    this.stuck = false;
-    // the row has left the window when nothing of it is seen and it is above: not when the page is scrolled sideways.
-    // Where nothing can watch it (a page's tests under Node), the row simply stays one row, as before.
-    if (typeof IntersectionObserver === 'function') {
-      new IntersectionObserver(([seen]) => this.stick(!seen.isIntersecting && seen.boundingClientRect.bottom <= 0))
-        .observe(tools);
-    }
-  }
-
-  /** The header's buttons: `regular` go up with it, `pinned` stay in sight. */
-  set(regular, pinned) {
-    this.regular = regular.filter(Boolean);
-    this.pinned.replaceChildren(...pinned.filter(Boolean));
-    this.place();
-  }
-
-  place() {
-    this.tools.replaceChildren(...this.regular, this.stuck ? this.placeholder : this.pinned);
-    if (this.stuck) this.slot.replaceChildren(this.pinned);
-  }
-
-  stick(stuck) {
-    if (stuck === this.stuck) return;
-    if (stuck) {
-      // the placeholder takes the block's room in the row, so that the header keeps its height
-      this.placeholder.style.setProperty('--w', `${this.pinned.offsetWidth}px`);
-      this.placeholder.style.setProperty('--h', `${this.pinned.offsetHeight}px`);
-    }
-    this.stuck = stuck;
-    this.place();
-    if (!stuck) this.slot.replaceChildren();
-    this.strip.classList.toggle('on', stuck);
-    this.strip.setAttribute('aria-hidden', String(!stuck));
-    // a page's own sticky parts stand under the strip: --pinbar-h is its height while it is there, 0 when not
-    document.documentElement.style.setProperty('--pinbar-h', stuck ? `${this.strip.offsetHeight}px` : '0px');
-  }
-
-  /** A magnifier for the pinned block: back to the search box, the cursor in it. Seen only in the strip: under the
-   *  header the box itself is in sight. */
-  static searchTool(search, title = 'Back to the search') {
-    const button = Dom.el('button', { type: 'button', class: 'btn icon to-search', title, 'aria-label': title }, Icon.make('search'));
-    button.addEventListener('click', () => {
-      window.scrollTo({ top: 0, behavior: HeaderBlocks.motion() });
-      search.focus();
+  constructor(box, top, up = 'Back to the top') {
+    this.box = box;
+    this.gap = 8; // the room between the window's top and the panel where its own `top` cannot be read
+    this.lens = null; // the magnifier of a narrow screen, once the page gives one
+    this.mark = Dom.el('button', { type: 'button', class: 'dock-mark', title: up, 'aria-label': up }, Dock.mark(top));
+    this.mark.addEventListener('click', () => window.scrollTo({ top: 0, behavior: Dock.motion() }));
+    this.services = Dom.el('span', { class: 'dock-services' });
+    this.start = Dom.el('div', { class: 'dock-start' }, this.mark, this.services);
+    this.find = Dom.el('div', { class: 'dock-find' });
+    this.tools = Dom.el('div', { class: 'dock-tools' });
+    this.box.replaceChildren(this.start, this.find, this.tools);
+    this.gone = false; // the header is out of the window, above it
+    // the focus passing from the magnifier to the field is not the focus leaving the search
+    this.find.addEventListener('focusout', (event) => { if (!this.find.contains(event.relatedTarget)) this.fold(); });
+    // Enter says "found": the field folds back and the keyboard of a phone goes away
+    this.find.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && this.box.classList.contains('finding') && event.target.blur) event.target.blur();
     });
-    return button;
+    // Where nothing can watch (a page's tests under Node), the header simply stays: the panel has no mark then.
+    if (typeof IntersectionObserver === 'function') {
+      new IntersectionObserver(([seen]) => this.leave(!seen.isIntersecting && seen.boundingClientRect.bottom <= 0)).observe(top);
+    }
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => this.measure()).observe(this.box);
+    this.draw();
   }
 
-  /** The page's mark for the strip: a copy of its logo, with ids of its own — two elements of one id would be one. */
+  /** The page's buttons, nodes, as often as they change; `services` — the way to the services, as a button, or null where
+   *  the page has none. The nodes are the page's: their ids and handlers stay. */
+  set(buttons, services = null) {
+    this.tools.replaceChildren(...buttons.filter(Boolean));
+    this.services.replaceChildren(...(services ? [services] : []));
+    this.draw();
+  }
+
+  /** The search the page has: its box and the magnifier for a narrow screen. A page without a search gives nothing. */
+  finder(field = null, lens = null) {
+    this.lens = lens;
+    this.find.replaceChildren(...[lens, field].filter(Boolean));
+    this.box.classList.remove('finding');
+    this.draw();
+  }
+
+  /** The screen is narrow when the magnifier is shown: only then a field is put away behind it. */
+  narrow() {
+    return Boolean(this.lens && this.lens.getClientRects().length);
+  }
+
+  /** On a narrow screen the field is shown, where only a magnifier stood: the caller puts the cursor in it. */
+  reveal() {
+    if (this.narrow()) this.box.classList.add('finding');
+  }
+
+  /** The field is put away again: what was typed in it stays, and the page says so by the magnifier. */
+  fold() {
+    this.box.classList.remove('finding');
+  }
+
+  /** The header has left the window or is back. */
+  leave(gone) {
+    if (gone === this.gone) return;
+    this.gone = gone;
+    this.draw();
+  }
+
+  draw() {
+    const buttons = [...this.tools.children].some((node) => !node.hidden); // a chip that says nothing yet is there, and hidden
+    this.tools.hidden = !buttons;
+    this.box.hidden = !this.find.children.length && !buttons;
+    this.box.classList.toggle('gone', this.gone);
+    this.measure();
+  }
+
+  /** The room between the window's top and the panel when it sticks: its own `top` (ui.css; it is smaller on a phone). */
+  room() {
+    const top = typeof getComputedStyle === 'function' ? Number.parseFloat(getComputedStyle(this.box).top) : Number.NaN;
+    return Number.isFinite(top) ? top : this.gap;
+  }
+
+  /** The room the panel takes at the top of the window, for what sticks under it and for the links that stop under it. */
+  measure() {
+    const root = document.documentElement;
+    if (this.box.hidden) {
+      root.style.removeProperty('--pinbar-h');
+      root.style.removeProperty('--pinbar-space');
+      return;
+    }
+    const height = Math.ceil(this.box.getBoundingClientRect().height) + this.room();
+    root.style.setProperty('--pinbar-h', `${height}px`);
+    root.style.setProperty('--pinbar-space', `${height + 14}px`);
+  }
+
+  /** The tool the keyboard stands on, as its group (one of the boxes: the header's row of buttons, the panel's `tools`)
+   *  and its key — the `data-tool` of the button, which the page gives to every one: the words on it, or a name of its own
+   *  for a button whose words change (the theme's). A redrawn toolbar must not drop the keyboard's place, and must not
+   *  give it to a neighbour either: the buttons of one group change with the view. */
+  static held(...boxes) {
+    const at = document.activeElement;
+    for (const box of boxes) {
+      const tool = box && box.contains(at) && at.closest ? at.closest('[data-tool]') : null;
+      if (tool) return { box, key: tool.dataset.tool };
+    }
+    return null;
+  }
+
+  /** The keyboard goes back to the button of the same key in the same group, once the buttons are drawn again. Where the
+   *  group has none (the main button of a mode went with the mode) it stays where the browser put it: a wrong button
+   *  under Enter is worse than none. */
+  static hold(held) {
+    const same = held && [...held.box.children].find((tool) => tool.dataset && tool.dataset.tool === held.key);
+    if (same && same.focus) same.focus();
+  }
+
+  /** The page's mark for the panel: a copy of its logo, with ids of its own — two elements of one id would be one. */
   static mark(top) {
     const logo = top && top.querySelector ? top.querySelector('.logo') : null;
     if (!logo) return Icon.make('back');
@@ -258,8 +311,53 @@ class HeaderBlocks {
     return copy;
   }
 
+  /** "Reduce motion" is the device's word: the jump is then at once. */
   static motion() {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  }
+}
+
+class BlockNames {
+  /**
+   * The names of the page's two blocks, written on them on demand, so that two people, or a person and an agent, mean the
+   * same parts of a page when they speak of it. The header and the panel carry their names in `data-name` in the markup;
+   * with the class `names` on the body ui.css draws a dashed line round each and its name on a tab. A button in the footer
+   * turns it on and off, and this browser remembers the choice for every home page of this address.
+   *
+   *   BlockNames.apply();                              // at the start: the choice made before is shown
+   *   footer.append(BlockNames.button(text, title));   // the words are the page's
+   */
+  static KEY = 'home.names';
+
+  static on() {
+    try {
+      return window.localStorage.getItem(BlockNames.KEY) === 'true';
+    } catch (err) {
+      return false; // a private window may not let it: the names are then off
+    }
+  }
+
+  static apply() {
+    document.body.classList.toggle('names', BlockNames.on());
+  }
+
+  static button(text, title) {
+    const button = Dom.el('button', { type: 'button', class: 'linklike', title }, text);
+    button.setAttribute('aria-pressed', String(BlockNames.on()));
+    button.addEventListener('click', () => {
+      const on = !BlockNames.on();
+      try {
+        window.localStorage.setItem(BlockNames.KEY, String(on));
+      } catch (err) {
+        // not kept: it is shown for this visit only
+        document.body.classList.toggle('names', on);
+        button.setAttribute('aria-pressed', String(on));
+        return;
+      }
+      BlockNames.apply();
+      button.setAttribute('aria-pressed', String(on));
+    });
+    return button;
   }
 }
 
@@ -277,3 +375,5 @@ class Glow {
     });
   }
 }
+
+if (typeof module !== 'undefined') module.exports = { Dom, Icon, Toast, Search, Dock, BlockNames, Glow };

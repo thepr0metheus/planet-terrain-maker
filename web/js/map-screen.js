@@ -31,6 +31,7 @@ export class MapScreen {
     this._shape = 'circle';
     this._guide = null;             // the two-places guide's step on the map: 'place', 'other'; null: no guide
     this._starts = {};              // world -> { lat, lon, zoom } where its map opens (the server keeps them)
+    this._contours = {};            // world -> { points, closed }: the contour drawn there, while another world is shown
     this.onWorldPicked = null;      // (id) -> true when the guide takes the choice of a world
     this.onKind = () => {};         // ('one' | 'two'): the kind of model asked for
     this._abort = null;
@@ -118,8 +119,16 @@ export class MapScreen {
   // the page's own).
   showWorld(id, view = null) {
     const world = worldOf(id);
-    const changed = this.view.world?.id !== id;
+    const was = this.view.world?.id;
+    const changed = was !== id;
     this.contour.detach();
+    // A contour is drawn on one world: the same corners on another are another place, and capturing
+    // them there would take ground nobody chose. Each world keeps its own contour, none at first.
+    if (changed && was) {
+      this._contours[was] = { points: this.contour.points, closed: this.contour.closed };
+      const kept = this._contours[id];
+      this.contour.set(kept?.points ?? [], kept?.closed ?? false);
+    }
     // Earth always uses Sentinel-2 for selection; the model's source is chosen in later steps.
     this.view.showWorld(id, view ?? this._starts[id] ?? null, id === 'earth' ? world.pictures.find((p) => p.id === 's2').map : null);
     if (changed) this.search.reset();

@@ -17,6 +17,14 @@ import { CaptureSources } from './capture-sources.js';
 
 const $ = (id) => document.getElementById(id);
 
+// What the page says of a line that runs into itself (Divider.crossing), by where it does.
+const CROSSING = {
+  drawn: () => t('The line crosses itself: move a point.'),
+  first: () => t('The line crosses itself past its first point: move a point.'),
+  last: () => t('The line crosses itself past its last point: move a point.'),
+  ends: () => t("The line's run-ons past its first and last points cross: move a point."),
+};
+
 // The size of a shape, as written under it: the circle's width, or the contour's width by height.
 export function sizeOf(outline) {
   if (outline.kind === 'circle') return `⌀ ${formatDistance(2 * outline.radiusM)}`;
@@ -249,6 +257,11 @@ export class CompareFlow {
         const divider = this.lineTool.divider();
         if (!divider) {
           this._app.say(t('Put two points or more for your own line, or choose the line through the centre.'));
+          return false;
+        }
+        const crossing = divider.crossing(this._models.model.outline.reachM);
+        if (crossing) {
+          this._app.say(CROSSING[crossing](), 'error');
           return false;
         }
         this._line = divider;

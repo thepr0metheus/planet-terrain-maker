@@ -191,6 +191,9 @@ body { overflow: hidden; }
 .guide-bar p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
 .guide-bar { max-height: calc(100% - 24px); overflow-y: auto; }
 .guide-bar .row { justify-content: flex-end; }
+/* A message is read over the guide's bar: the shared look stands it at 100, under the bar, and a
+   refusal said while the guide is open (a line that crosses itself) showed only its last word. */
+.toast { z-index: 1250; }
 
 .busy {
   position: absolute; left: 50%; top: 50%; z-index: 1200; transform: translate(-50%, -50%);

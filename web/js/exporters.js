@@ -43,11 +43,14 @@ export function stlOf(solids, title = 'model') {
   return bytes;
 }
 
+// Points closer than this are one point in the weld.
+export const WELD_MM = 1e-4;
+
 // The solids as one mesh whose corners are shared: the same point is one vertex, however many
 // triangles meet there. 3MF wants that (its slicers check that every edge has two triangles), and
 // the walls and the top of a model have their own copies of the points they share. Triangles that
 // shrink to a line in the weld are left out.
-export function weld(solids, gridMm = 1e-4) {
+export function weld(solids, gridMm = WELD_MM) {
   const index = new Map();
   const vertices = [];
   const faces = [];

@@ -57,3 +57,35 @@ test('a line needs two points apart; it keeps to JSON', () => {
   assert.deepEqual(back.points, [[-500.12, 1], [500, 2]]);
   assert.equal(back.angleDeg, 45);
 });
+
+// A line drawn by points runs on straight past its ends. Where that runs into the line itself, the
+// line has no two sides: the test of a side hands pieces of one place to the other. Such a line is
+// refused, and the page says where it crosses.
+test('a line that runs into itself, between its points or past an end, says where', () => {
+  // across, then a hook back: past the last point the line runs on into its own first stretch
+  const hook = [[-800, 0], [400, 0], [450, 300], [300, 150]];
+  assert.equal(new Divider({ points: hook, smooth: false }).crossing(R), 'last');
+  assert.equal(new Divider({ points: hook }).crossing(R), 'last', 'smooth too');
+  assert.equal(new Divider({ points: [...hook].reverse(), smooth: false }).crossing(R), 'first');
+  // its own stretches cross between its points
+  assert.equal(new Divider({ points: [[-500, 0], [500, 0], [0, 300], [0, -300]], smooth: false }).crossing(R), 'drawn');
+  // turned, the same
+  assert.equal(new Divider({ points: hook, angleDeg: 130, smooth: false }).crossing(R), 'last');
+  // a line that does not cross itself even carried on, but what runs on past its first point crosses
+  // the far side that closes the second place's half from its last end: refused too, both ends told
+  const round = new Divider({ points: [[-632, 698], [348, 126], [624, -552], [-188, 86]], smooth: false });
+  assert.equal(round.crossing(R), 'ends');
+  // a hook whose run-on meets what runs on past the first point: both ends are told
+  assert.equal(new Divider({ points: [[-500, 0], [400, 0], [480, 120], [250, 100]], smooth: false }).crossing(R), 'ends');
+});
+
+test('lines that divide cleanly have no crossing: the centre line, a bend, an arch, an S', () => {
+  for (const divider of [
+    new Divider({ angleDeg: 0 }), new Divider({ angleDeg: 77 }),
+    new Divider({ points: [[-500, 300], [500, 300]] }),
+    new Divider({ points: [[-600, -200], [0, 500], [600, -200]] }),
+    new Divider({ points: [[-700, -100], [-200, 300], [200, -300], [700, 100]] }),
+  ]) {
+    assert.equal(divider.crossing(R), null, JSON.stringify(divider.toJSON()));
+  }
+});

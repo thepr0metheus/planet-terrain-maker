@@ -3,6 +3,7 @@
 // millimetres. Only the buildings whose middle lies inside the outline.
 
 import { ShapeUtils, Vector2 } from '../vendor/three/three.module.js';
+import { EarClipper } from './ear-clipper.js';
 import { t } from './i18n.js';
 
 export const MAX_SIDE_KM = 10;
@@ -79,9 +80,11 @@ export function buildingsSolid(buildings, outline, scale, groundMm) {
       // a wall faces out: the contour runs anticlockwise, so outward is on its right
       indices.push(first + i, first + j, first + n + j, first + i, first + n + j, first + n + i);
     }
-    for (const [a, b, c] of ShapeUtils.triangulateShape([...contour], [])) {
-      // earcut's own order is not promised: each triangle is put anticlockwise first
-      const [p, q, r] = ShapeUtils.isClockWise([contour[a], contour[b], contour[c]]) ? [a, c, b] : [a, b, c];
+    // The contour runs anticlockwise, and so do the triangles cut from it, every corner in them: a
+    // corner left out, or a triangle turned by its own sliver of a turn, opens a crack in the solid.
+    const cut = new EarClipper(contour.map((p) => p.x), contour.map((p) => p.y)).triangles();
+    for (let k = 0; k < cut.length; k += 3) {
+      const [p, q, r] = [cut[k], cut[k + 1], cut[k + 2]];
       indices.push(first + n + p, first + n + q, first + n + r);     // the roof, facing up
       indices.push(first + p, first + r, first + q);                 // the floor, facing down
     }

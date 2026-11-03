@@ -53,7 +53,7 @@ export class ModelView {
     this.renderer.domElement.addEventListener('webglcontextlost', () => this.onLost());
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;      // three.js 0.186 has no PCFSoftShadowMap: it used this and said so
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();

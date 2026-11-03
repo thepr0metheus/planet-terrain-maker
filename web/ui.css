@@ -41,6 +41,8 @@
   --ok-soft: light-dark(rgba(21, 128, 61, .10), rgba(74, 222, 128, .14));
   --warn: light-dark(#b45309, #fbbf24);
   --warn-soft: light-dark(rgba(180, 83, 9, .10), rgba(251, 191, 36, .14));
+  --warn-ink: light-dark(#8a3f08, #fbbf24);
+  --on-warn: light-dark(#ffffff, #1b1300);
   --blur: blur(16px) saturate(1.5);
   --shimmer: linear-gradient(100deg, var(--glass) 30%, var(--glass-up) 50%, var(--glass) 70%) 0 0 / 200% 100%;
 }
@@ -57,6 +59,7 @@
     --spot: rgba(142, 144, 255, .20); --blob-a: rgba(99, 102, 241, .36); --blob-b: rgba(34, 211, 238, .15);
     --blob-c: rgba(244, 114, 182, .13); --chip: rgba(255, 255, 255, .95); --field: rgba(255, 255, 255, .05);
     --ok: #4ade80; --ok-soft: rgba(74, 222, 128, .14); --warn: #fbbf24; --warn-soft: rgba(251, 191, 36, .14);
+    --warn-ink: #fbbf24; --on-warn: #1b1300;
   }
 }
 
@@ -94,7 +97,7 @@ code { font-family: var(--mono); font-size: .86em; }
 
 /* ---------- the frame of a page: name and tools on top, footer below ---------- */
 .wrap { max-width: 1200px; margin: 0 auto; padding: clamp(18px, 3vw, 36px) clamp(16px, 4vw, 40px) 72px; }
-/* Two columns: the name and the tools. A page may add a row of its own under them: the search (.finder).
+/* Two columns: the name and the tools. The pinned panel (Dock) stands under the header, a block of its own.
    The name's column has a minimum of its own, so that a toolbar with many buttons wraps into a second row
    instead of squeezing the name out. */
 .top {
@@ -114,33 +117,74 @@ h1 {
 .tools { grid-area: 1 / 2; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 footer { margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--stroke); color: var(--ink-3); font-size: 12.5px; }
 
-/* ---------- the header's two blocks (HeaderBlocks in ui.js): the pinned one stays in sight ---------- */
-/* While the header is on the screen, the pinned block stands last in its row of buttons. */
-.tools-pinned { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.tools-pinned-place { display: inline-block; width: var(--w, 0); height: var(--h, 0); }
-/* the magnifier leads back to the search box: in the header's row the box itself is in sight, in the strip it is not */
-.tools > .tools-pinned .to-search { display: none; }
-/* Once the row has left the window, a glass strip as wide as the page's column holds the block at the top. */
-.pinbar {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 40; padding: 8px clamp(16px, 4vw, 40px) 0;
-  pointer-events: none; opacity: 0; transform: translateY(-120%); visibility: hidden;
-  transition: transform .28s var(--ease), opacity .2s, visibility 0s .28s;
-}
-.pinbar.on { opacity: 1; transform: none; visibility: visible; transition: transform .28s var(--ease), opacity .2s; }
-.pinbar-box {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: calc(1200px - 2 * clamp(16px, 4vw, 40px));
-  margin: 0 auto; padding: 6px 8px 6px 10px; border-radius: 18px; pointer-events: auto;
-}
-.pinbar-mark { display: grid; place-items: center; padding: 0; border: 0; border-radius: 12px; background: none; cursor: pointer; line-height: 0; }
-.pinbar-mark .logo { width: 36px; height: 36px; filter: none; }
-.pinbar-tools { display: flex; align-items: center; gap: 8px; min-width: 0; }
-/* a jump to an anchor stops below the strip; --pinbar-h (set by HeaderBlocks) is the strip's height while it is shown */
+/* ---------- the pinned panel under the header (Dock in ui.js): the search and the buttons that stay in sight ---------- */
+/* It stands under the header; once the header has gone up with the page, it sticks to the top of the window. A jump to an
+   anchor stops below it: --pinbar-h is the room the panel takes (it is 0 while there is no panel). */
 :root { --pinbar-space: 76px; --pinbar-h: 0px; }
 :is(h1, h2, h3, h4, h5, h6)[id] { scroll-margin-top: var(--pinbar-space); }
+.dock {
+  --dock-gap: 12px;
+  position: sticky; top: 8px; z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 8px var(--dock-gap); margin: 0 0 18px; padding: 8px 10px;
+  border-radius: 20px;
+}
+/* the page's mark and the way to the services: they come once the header has gone, and slide in from the left */
+.dock-start {
+  display: flex; flex: none; align-items: center; gap: 6px; max-width: 0; margin-right: calc(-1 * var(--dock-gap)); overflow: hidden; opacity: 0; visibility: hidden;
+  transition: max-width .28s var(--ease), margin-right .28s var(--ease), opacity .2s, visibility 0s .28s;
+}
+.dock.gone .dock-start { max-width: 140px; margin-right: 0; opacity: 1; visibility: visible; transition: max-width .28s var(--ease), margin-right .28s var(--ease), opacity .2s; }
+/* the box clips, so a focus ring stands inside the button */
+.dock-start :focus-visible { outline-offset: -3px; }
+.dock-mark { display: grid; place-items: center; padding: 3px; border: 0; border-radius: 12px; background: none; cursor: pointer; line-height: 0; }
+.dock-mark .logo { width: 36px; height: 36px; filter: none; }
+.dock-services { display: inline-flex; }
+.dock-services .label { display: none; }
+.dock-services .btn { width: 42px; padding: 0; }
+.dock-find { display: flex; flex: 1 1 120px; min-width: 120px; }
+.dock-find:empty { display: none; }
+.dock-find .search { flex: 1; min-width: 0; height: 42px; border-radius: 14px; }
+/* the magnifier is a .btn, whose display comes later in this file: the panel's rule is the stronger */
+.dock .dock-lens { display: none; }
+.dock-tools { display: flex; flex: 0 1 auto; align-items: center; gap: 8px; }
+/* where the room is short the words of a button that says something waits go, then the keyboard hint of the field: they keep
+   their icons (and the count), and their names in the hint */
+@media (max-width: 900px) { .dock .btn.waiting .label { display: none; } .dock .btn.waiting { padding: 0 10px; } }
+@media (max-width: 760px) { .dock .search kbd { display: none; } }
+/* what waits for a person's word: an amber button in the panel, and it breathes — a ring of light that grows and fades, slowly:
+   the eye finds it, and it does not shout. "Reduce motion" stops the breathing (below) and leaves the colour. */
+.btn.waiting {
+  border-color: color-mix(in srgb, var(--warn) 55%, transparent); background: var(--warn-soft); color: var(--warn-ink);
+  animation: waiting 2.8s ease-in-out infinite;
+}
+.btn.waiting .count { margin-left: 0; background: var(--warn); color: var(--on-warn); }
+@media (hover: hover) { .btn.waiting:hover:not(:disabled) { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 24%, transparent); } }
+@keyframes waiting {
+  0%, 100% { background-color: var(--warn-soft); box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 0%, transparent); }
+  50% { background-color: color-mix(in srgb, var(--warn) 24%, transparent); box-shadow: 0 0 0 9px color-mix(in srgb, var(--warn) 20%, transparent); }
+}
+@keyframes waiting-ring {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 0%, transparent); }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--warn) 26%, transparent); }
+}
+/* The names of the two blocks, written on them on demand (BlockNames in ui.js): a dashed line round each block, and its name
+   on a tab at the edge. The header and the panel carry the names in `data-name`. */
+body.names #top { position: relative; }
+body.names :is(#top, #dock) { outline: 2px dashed var(--accent); outline-offset: -2px; }
+body.names :is(#top, #dock)::after {
+  content: attr(data-name); position: absolute; z-index: 3; padding: 2px 10px; border-radius: 999px; pointer-events: none;
+  background: var(--accent); color: var(--accent-ink); font: 700 12px/1.5 var(--font); letter-spacing: .02em;
+}
+body.names #top::after { top: -12px; right: 14px; }
+body.names #dock::after { top: -7px; left: 14px; }
+/* A button that reads as a link in a line of text: 'edit', 'names of the blocks'. */
+.linklike {
+  display: inline; padding: 0 2px; border: 0; background: none; color: var(--accent); font: inherit;
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.linklike:disabled { opacity: .5; cursor: default; }
 footer a { color: var(--accent); }
 
-/* ---------- the search: a row of its own under the name and the tools, across the whole width ---------- */
-.finder { grid-area: 2 / 1 / 3 / -1; }
+/* ---------- the search: a box in the pinned panel (Dock), as wide as the room it is given ---------- */
 .search {
   display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 14px; border-radius: 16px;
   background: var(--glass); border: 1px solid var(--stroke); color: var(--ink-3);
@@ -339,13 +383,21 @@ dialog.tall { width: min(620px, calc(100vw - 28px)); max-height: calc(100vh - 28
 }
 @media (max-width: 640px) {
   .top { grid-template-columns: 1fr; }
-  /* one column: the tools go under the name, and under the search when the page has one */
+  /* one column: the tools go under the name */
   .tools { grid-area: 2 / 1; justify-content: flex-start; }
-  .finder ~ .tools { grid-area: 3 / 1; }
   .logo { width: 44px; height: 44px; }
-  /* in the strip only the icons: a button's words stay in its hint and its aria-label */
-  .pinbar .btn .label { display: none; }
-  .pinbar .btn { width: 42px; padding: 0; }
+  /* the panel is one row: the search is a magnifier that opens the field over the whole panel, the buttons are icons: a
+     button's words stay in its hint and its aria-label */
+  .dock { --dock-gap: 8px; top: 6px; margin-bottom: 14px; padding: 6px 8px; gap: 6px var(--dock-gap); }
+  .dock .btn { width: 42px; padding: 0; }
+  .dock .btn .label { display: none; }
+  .dock .btn.waiting { width: auto; padding: 0 10px; }
+  .dock .dock-lens { display: inline-flex; }
+  .dock-find { flex: 0 0 auto; min-width: 0; }
+  .dock-find .search { display: none; }
+  .dock.finding .dock-find { flex: 1 1 100%; }
+  .dock.finding .dock-find .search { display: flex; }
+  .dock.finding :is(.dock-lens, .dock-start, .dock-tools) { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

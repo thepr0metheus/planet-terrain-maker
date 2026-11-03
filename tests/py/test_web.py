@@ -1,13 +1,10 @@
 """The page as the browser gets it: the shared look first, nothing inline (the page's
 Content-Security-Policy refuses it), and every element the scripts ask for."""
 import re
-import tempfile
 import unittest
 from pathlib import Path
 
-from fakes import FakeFetcher
-
-from app.server import CSP, create_app
+from helpers import ServerCase
 
 ROOT = Path(__file__).resolve().parents[2]
 WEB = ROOT / "web"
@@ -58,27 +55,18 @@ class InGitTest(unittest.TestCase):
         self.assertEqual(sorted(on_disk - known), [], "files the page has here and a server would not get")
 
 
-class ServedTest(unittest.TestCase):
-    def setUp(self):
-        self.dir = tempfile.TemporaryDirectory()
-        self.client = create_app(Path(self.dir.name), fetcher=FakeFetcher()).test_client()
-
-    def tearDown(self):
-        self.dir.cleanup()
-
+class ServedTest(ServerCase):
     def test_the_page_comes_with_the_policy_and_its_files_with_their_types(self):
-        page = self.client.get("/")
-        page.close()
-        self.assertEqual(page.headers["Content-Security-Policy"], CSP)
-        self.assertIn("default-src 'self'", CSP)
-        self.assertIn("img-src 'self' data: blob:", CSP)
-        self.assertIn("connect-src 'self' https: blob:", CSP)
+        page = self.server.get("/")
+        policy = page.headers["Content-Security-Policy"]
+        self.assertIn("default-src 'self'", policy)
+        self.assertIn("img-src 'self' data: blob:", policy)
+        self.assertIn("connect-src 'self' https: blob:", policy)
         for name, kind in (("ui.css", "text/css"), ("js/app.js", "text/javascript"), ("vendor/three/three.module.js", "text/javascript"),
                            ("data/moon-names.json", "application/json"), ("favicon.svg", "image/svg+xml")):
             with self.subTest(name=name):
-                answer = self.client.get(f"/{name}")
-                answer.close()
-                self.assertEqual(answer.status_code, 200)
+                answer = self.server.get(f"/{name}")
+                self.assertEqual(answer.status, 200)
                 self.assertEqual(answer.mimetype, kind)
 
 

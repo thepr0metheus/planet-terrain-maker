@@ -1,55 +1,54 @@
 """Copernicus heights from AWS: files made here the way the real ones are made (float32, deflate, the
 floating-point predictor, internal tiles, pixel-is-point, an overview), served by a fake S3."""
 import struct
-import tempfile
 import unittest
 import zlib
-from pathlib import Path
 
-import numpy as np
-from fakes import FakeFetcher
+from helpers import Answer, ServerCase, Upstream
 
-from app.copdem import CopernicusAws, file_name, unpredict
-from app.fetch import Answer, FetchError
+STEP = 1 / 8                      # 8 pixels a degree: small files
 
 
-def predict(heights: np.ndarray) -> bytes:
+def predict(rows: list) -> bytes:
     """The floating-point predictor, the way a writer applies it: the floats big-endian, their bytes in
     four runs a row, each byte minus the one before it."""
-    rows, width = heights.shape
-    planes = heights.astype(">f4").view(np.uint8).reshape(rows, width, 4).transpose(0, 2, 1).reshape(rows, width * 4)
-    diff = planes.copy()
-    diff[:, 1:] = planes[:, 1:] - planes[:, :-1]
-    return diff.tobytes()
+    out = bytearray()
+    for row in rows:
+        raw = b"".join(struct.pack(">f", value) for value in row)
+        before = 0
+        for plane in range(4):
+            for at in range(plane, len(raw), 4):
+                out.append((raw[at] - before) & 255)
+                before = raw[at]
+    return bytes(out)
 
 
-def make_cog(heights: np.ndarray, lon0: float, lat0: float, step: float, tile: int = 4) -> bytes:
-    """A little-endian GeoTIFF of these heights (pixel (0, 0) at lon0, lat0), and an overview of half size
-    made as GDAL makes it: each pixel the mean of the four under it."""
-    half = (heights[0::2, 0::2] + heights[1::2, 0::2] + heights[0::2, 1::2] + heights[1::2, 1::2]) / 4
-    levels = [heights, half.astype(np.float32)]
+def make_cog(heights: list, lon0: float, lat0: float, step: float, tile: int = 4) -> bytes:
+    """A little-endian GeoTIFF of these heights (rows from the north; pixel (0, 0) at lon0, lat0), and an
+    overview of half size made as GDAL makes it: each pixel the mean of the four under it."""
+    half = [[(heights[r][c] + heights[r + 1][c] + heights[r][c + 1] + heights[r + 1][c + 1]) / 4
+             for c in range(0, len(heights[0]) - 1, 2)] for r in range(0, len(heights) - 1, 2)]
+    levels = [heights, half]
     body = bytearray(b"II*\x00\x00\x00\x00\x00")
     blobs = []
     for level in levels:
-        h, w = level.shape
         tiles = []
-        for ty in range(0, h, tile):
-            for tx in range(0, w, tile):
-                block = np.zeros((tile, tile), dtype=np.float32)
-                part = level[ty:ty + tile, tx:tx + tile]
-                block[:part.shape[0], :part.shape[1]] = part
+        for ty in range(0, len(level), tile):
+            for tx in range(0, len(level[0]), tile):
+                block = [[level[r][c] if r < len(level) and c < len(level[0]) else 0.0
+                          for c in range(tx, tx + tile)] for r in range(ty, ty + tile)]
                 tiles.append(zlib.compress(predict(block)))
         blobs.append(tiles)
     data_at = []
     for tiles in blobs:
         offsets = []
-        for t in tiles:
+        for piece in tiles:
             offsets.append(len(body))
-            body += t
+            body += piece
         data_at.append(offsets)
     ifd_offsets = []
     for n, level in enumerate(levels):
-        h, w = level.shape
+        h, w = len(level), len(level[0])
         extra = bytearray()
         base = len(body)
         entries = [(256, 3, 1, w), (257, 3, 1, h), (258, 3, 1, 32), (259, 3, 1, 8), (277, 3, 1, 1), (317, 3, 1, 3),
@@ -76,89 +75,187 @@ def make_cog(heights: np.ndarray, lon0: float, lat0: float, step: float, tile: i
     return bytes(body)
 
 
-class FakeS3(FakeFetcher):
-    """Files by name; a Range header gets that part of the file."""
-
-    def __init__(self, files):
-        super().__init__()
-        self.files = files
-
-    def get(self, url, headers=None, timeout=None):
-        self.asked.append(url)
-        name = url.rsplit("/", 1)[-1]
-        if name not in self.files:
-            raise FetchError("HTTP 404", 404)
-        body = self.files[name]
-        if headers and "Range" in headers:
-            start, end = (int(v) for v in headers["Range"].split("=")[1].split("-"))
-            body = body[start:end + 1]
-        return Answer(body, "image/tiff", 206)
+def file_name(code: str, lat: int, lon: int) -> str:
+    ns = f"{'N' if lat >= 0 else 'S'}{abs(lat):02d}"
+    ew = f"{'E' if lon >= 0 else 'W'}{abs(lon):03d}"
+    return f"Copernicus_DSM_COG_{code}_{ns}_00_{ew}_00_DEM"
 
 
 def plane(lon0, lat0, step, n):
     """Heights that rise 1000 m a degree east and 100 m a degree north, at each pixel's point."""
-    lons = lon0 + step * np.arange(n)
-    lats = lat0 - step * np.arange(n)
-    return (lons[None, :] * 1000 + lats[:, None] * 100).astype(np.float32)
+    return [[(lon0 + step * c) * 1000 + (lat0 - step * r) * 100 for c in range(n)] for r in range(n)]
 
 
-class CopernicusAwsTest(unittest.TestCase):
-    STEP = 1 / 8                      # 8 pixels a degree: small files
+def full(value, n):
+    return [[value] * n for _ in range(n)]
 
-    def setUp(self):
-        self.dir = tempfile.TemporaryDirectory()
 
-    def tearDown(self):
-        self.dir.cleanup()
+class FakeS3:
+    """Files by name; a Range header gets that part of the file."""
 
-    def cop(self, files):
-        fetcher = FakeS3(files)
-        return CopernicusAws(fetcher, Path(self.dir.name), log=lambda *a: None), fetcher
+    def __init__(self, files: dict):
+        self.files = files
 
-    def test_the_predictor_comes_undone(self):
-        heights = (np.random.default_rng(1).random((4, 6), dtype=np.float32) * 9000 - 400).astype(np.float32)
-        self.assertTrue(np.array_equal(unpredict(predict(heights), 6, 4), heights))
+    def __call__(self, asked):
+        name = asked.url.rsplit("/", 1)[-1]
+        if name not in self.files:
+            return 404
+        body = self.files[name]
+        said = asked.headers.get("Range")
+        if said:
+            start, end = (int(v) for v in said.split("=")[1].split("-"))
+            body = body[start:end + 1]
+        return Answer(body, "image/tiff", 206)
+
+
+class CopernicusAwsTest(ServerCase):
+    def serve(self, files):
+        """A server of its own on a data folder of its own, and S3 holding these files."""
+        upstream = Upstream({"s3.amazonaws.com": FakeS3(files)})
+        self.addCleanup(upstream.close)
+        data = self.home / f"data-{len(list(self.home.iterdir()))}"
+        data.mkdir()
+        return self.new_server(upstream, data), upstream
+
+    def heights(self, server, south, north, west, east, cells):
+        return server.get(f"/api/earth/heights?south={south}&north={north}&west={west}&east={east}&cells={cells}&source=aws")
+
+    @staticmethod
+    def values(grid) -> list:
+        cols, rows = int(grid.headers["X-Grid-Cols"]), int(grid.headers["X-Grid-Rows"])
+        flat = struct.unpack(f"<{cols * rows}f", grid.data)
+        return [list(flat[r * cols:(r + 1) * cols]) for r in range(rows)]
 
     def test_heights_across_two_files_are_the_plane_they_were_made_of(self):
-        files = {}
-        for lon in (42, 43):
-            name = file_name("10", 43, lon)
-            files[f"{name}.tif"] = make_cog(plane(lon, 44.0, self.STEP, 8), lon, 44.0, self.STEP)
-        cop, fetcher = self.cop(files)
-        grid = cop.grid(43.2, 43.8, 42.3, 43.6, 64)
-        got = np.array(grid.values, dtype=np.float32).reshape(grid.rows, grid.cols)
-        lats = 43.8 - 0.6 * np.arange(grid.rows) / (grid.rows - 1)
-        lons = 42.3 + 1.3 * np.arange(grid.cols) / (grid.cols - 1)
-        want = lons[None, :] * 1000 + lats[:, None] * 100
-        inside = lons < 42.0 + 7 * self.STEP        # past the last pixel of the first file the edge is held
-        self.assertLess(float(np.abs(got[:, inside] - want[:, inside]).max()), 0.05)
-        right = lons >= 43.0
-        self.assertLess(float(np.abs(got[:, right] - want[:, right]).max()), 0.05)
-        self.assertIn("GLO-30", grid.source)
-        asked = len(fetcher.asked)
-        cop2, fetcher2 = self.cop(files)
-        cop2.grid(43.2, 43.8, 42.3, 43.6, 64)
-        self.assertEqual(fetcher2.asked, [], "the second time every piece comes from disk")
+        files = {f"{file_name('10', 43, lon)}.tif": make_cog(plane(lon, 44.0, STEP, 8), lon, 44.0, STEP) for lon in (42, 43)}
+        server, upstream = self.serve(files)
+        grid = self.heights(server, 43.2, 43.8, 42.3, 43.6, 64)
+        self.assertEqual(grid.status, 200)
+        got = self.values(grid)
+        rows, cols = len(got), len(got[0])
+        for r, row in enumerate(got):
+            lat = 43.8 - 0.6 * r / (rows - 1)
+            for c, value in enumerate(row):
+                lon = 42.3 + 1.3 * c / (cols - 1)
+                if lon < 42.0 + 7 * STEP or lon >= 43.0:     # past the last pixel of the first file the edge is held
+                    self.assertLess(abs(value - (lon * 1000 + lat * 100)), 0.05, (lat, lon))
+        self.assertIn("GLO-30", grid.headers["X-Grid-Source"])
+        self.assertEqual(grid.headers["X-Grid-Box"], "43.2,43.8,42.3,43.6")
+        asked = len(upstream.asked)
         self.assertGreater(asked, 0)
+        self.assertIn("https://copernicus-dem-30m.s3.amazonaws.com/Copernicus_DSM_COG_10_N43_00_E042_00_DEM/Copernicus_DSM_COG_10_N43_00_E042_00_DEM.tif", upstream.asked)
+        self.assertEqual(upstream.requests[0].headers["Range"], "bytes=0-65535")
+
+    def test_the_second_time_every_piece_comes_from_disk(self):
+        name = file_name("10", 43, 42)
+        server, upstream = self.serve({f"{name}.tif": make_cog(plane(42, 44.0, STEP, 8), 42, 44.0, STEP)})
+        first = self.heights(server, 43.2, 43.8, 42.3, 42.6, 32)
+        before = len(upstream.asked)
+        self.assertEqual(self.heights(server, 43.2, 43.8, 42.3, 42.6, 32).data, first.data)
+        self.assertEqual(len(upstream.asked), before, "the file's head is known, its tiles are on disk")
+        pieces = list((server.data / "cache" / "copernicus" / name).iterdir())
+        self.assertTrue(pieces)
+        for piece in pieces:
+            self.assertRegex(piece.name, r"^\d+-\d+\.bin$")
+        server.restart()
+        self.assertEqual(self.heights(server, 43.2, 43.8, 42.3, 42.6, 32).data, first.data)
+        self.assertEqual(len(upstream.asked), before, "after a restart too")
 
     def test_where_30_m_is_not_released_90_m_answers_and_open_sea_is_0(self):
         name90 = file_name("30", 43, 42)
-        cop, _ = self.cop({f"{name90}.tif": make_cog(np.full((8, 8), 777, dtype=np.float32), 42, 44.0, self.STEP)})
-        grid = cop.grid(43.3, 43.6, 42.3, 42.6, 16)
-        self.assertTrue(all(abs(v - 777) < 1e-3 for v in grid.values))
-        self.assertIn("GLO-90", grid.source)
-        with tempfile.TemporaryDirectory() as other:
-            sea = CopernicusAws(FakeS3({}), Path(other), log=lambda *a: None)
-            empty = sea.grid(43.3, 43.6, 42.3, 42.6, 16)
-        self.assertTrue(all(v == 0 for v in empty.values))
+        server, _ = self.serve({f"{name90}.tif": make_cog(full(777.0, 8), 42, 44.0, STEP)})
+        grid = self.heights(server, 43.3, 43.6, 42.3, 42.6, 16)
+        self.assertTrue(all(abs(v - 777) < 1e-3 for row in self.values(grid) for v in row))
+        self.assertIn("GLO-90", grid.headers["X-Grid-Source"])
+        sea, _ = self.serve({})
+        empty = self.heights(sea, 43.3, 43.6, 42.3, 42.6, 16)
+        self.assertEqual(empty.status, 200)
+        self.assertTrue(all(v == 0 for row in self.values(empty) for v in row))
+        self.assertEqual(empty.headers["X-Grid-Source"], "Copernicus DEM (ESA), AWS Open Data: open sea")
+
+    def test_a_grid_across_the_30_and_the_90_m_files_names_both(self):
+        server, _ = self.serve({f"{file_name('10', 43, 42)}.tif": make_cog(full(1.0, 8), 42, 44.0, STEP),
+                                f"{file_name('30', 43, 43)}.tif": make_cog(full(2.0, 8), 43, 44.0, STEP)})
+        grid = self.heights(server, 43.3, 43.6, 42.5, 43.5, 16)
+        self.assertEqual(grid.headers["X-Grid-Source"], "Copernicus DEM GLO-30 (ESA), AWS Open Data + Copernicus DEM GLO-90 (ESA), AWS Open Data")
 
     def test_a_big_region_reads_the_smaller_copy(self):
         name = file_name("10", 43, 42)
-        cop, _ = self.cop({f"{name}.tif": make_cog(plane(42, 44.0, self.STEP, 8), 42, 44.0, self.STEP)})
-        grid = cop.grid(43.05, 43.9, 42.05, 42.85, 4)
-        self.assertLessEqual(max(grid.cols, grid.rows), 4)
-        got = np.array(grid.values).reshape(grid.rows, grid.cols)
-        self.assertTrue(np.all(np.diff(got, axis=1) > 0), "still rising eastwards")
+        server, _ = self.serve({f"{name}.tif": make_cog(plane(42, 44.0, STEP, 8), 42, 44.0, STEP)})
+        grid = self.heights(server, 43.05, 43.9, 42.05, 42.85, 4)
+        got = self.values(grid)
+        self.assertLessEqual(max(len(got), len(got[0])), 4)
+        for row in got:
+            self.assertTrue(all(b > a for a, b in zip(row, row[1:])), "still rising eastwards")
+
+    def test_a_damaged_file_is_a_bad_gateway_and_says_what_it_is(self):
+        # what a service that sends a cut-off file, a page that is not a file or a file that is not made
+        # as these are made leaves behind: each used to end in struct.error, KeyError or zlib.error, a crash
+        good = make_cog(plane(42, 44.0, STEP, 8), 42, 44.0, STEP)
+        first_directory = struct.unpack_from("<I", good, 4)[0]
+
+        def entry_of(tag):
+            count = struct.unpack_from("<H", good, first_directory)[0]
+            tags = [struct.unpack_from("<H", good, first_directory + 2 + 12 * i)[0] for i in range(count)]
+            return first_directory + 2 + 12 * tags.index(tag)
+
+        no_width = bytearray(good)
+        struct.pack_into("<H", no_width, entry_of(256), 999)                  # ImageWidth is now another tag
+        short_scale = bytearray(good)
+        struct.pack_into("<I", short_scale, entry_of(33550) + 4, 1)           # the pixel size has one value, not three
+        broken_tile = bytearray(good)
+        broken_tile[8:40] = b"\xff" * 32                                        # the first tile's deflate stream
+        small_tile = bytearray(good)
+        stream = zlib.compress(b"\x00" * 16)
+        small_tile[8:8 + len(stream)] = stream                                # inflates, to 16 bytes, not a tile's worth
+        wide = bytearray(good)
+        struct.pack_into("<H", wide, entry_of(256) + 8, 64)                   # a width that needs more tiles than are listed
+        damaged = {
+            "the magic and nothing else": b"II*\x00",
+            "the magic and a directory that is not there": b"II*\x00\x08\x00\x00\x00",
+            "the first bytes only": good[:8],
+            "cut in half": good[: len(good) // 2],
+            "without a tag that is needed": bytes(no_width),
+            "a tag with fewer values than it needs": bytes(short_scale),
+            "a tile that does not inflate": bytes(broken_tile),
+            "a tile that inflates to too little": bytes(small_tile),
+            "more tiles across than the table lists": bytes(wide),
+            "big-endian": b"MM\x00*\x00\x00\x00\x08",
+        }
+        name = f"{file_name('10', 43, 42)}.tif"
+        for what, body in damaged.items():
+            with self.subTest(what):
+                server, _ = self.serve({name: body})
+                answer = self.heights(server, 43.3, 43.6, 42.3, 42.6, 16)
+                self.assertEqual(answer.status, 502)
+                self.assertIn("Copernicus on AWS", answer.json()["error"])
+                self.assertNotIn("HTTP", answer.json()["error"], "the file is damaged, the service did answer")
+
+    def test_a_service_that_does_not_answer_is_not_a_damaged_file(self):
+        upstream = Upstream({"s3.amazonaws.com": 500})
+        self.addCleanup(upstream.close)
+        answer = self.new_server(upstream).get("/api/earth/heights?south=43.3&north=43.6&west=42.3&east=42.6&cells=16&source=aws")
+        self.assertEqual(answer.status, 502)
+        self.assertIn("HTTP 500", answer.json()["error"])
+
+    def test_a_tile_that_cannot_be_fetched_is_not_a_damaged_file(self):
+        # the header comes, the tiles do not: the service failed, the file is not damaged
+        good = make_cog(plane(42, 44.0, STEP, 8), 42, 44.0, STEP)
+        s3 = FakeS3({f"{file_name('10', 43, 42)}.tif": good})
+        upstream = Upstream({"s3.amazonaws.com": lambda asked: s3(asked) if asked.headers["Range"].startswith("bytes=0-") else 500})
+        self.addCleanup(upstream.close)
+        answer = self.new_server(upstream).get("/api/earth/heights?south=43.3&north=43.6&west=42.3&east=42.6&cells=16&source=aws")
+        self.assertEqual(answer.status, 502)
+        self.assertIn("HTTP 500", answer.json()["error"])
+
+    def test_a_server_that_ignores_the_range_sends_the_whole_file(self):
+        name = file_name("10", 43, 42)
+        whole = make_cog(full(5.0, 8), 42, 44.0, STEP)
+        upstream = Upstream({"s3.amazonaws.com": lambda asked: Answer(whole, "image/tiff") if name in asked.url and "_10_" in asked.url else 404})
+        self.addCleanup(upstream.close)
+        grid = self.new_server(upstream).get("/api/earth/heights?south=43.3&north=43.6&west=42.3&east=42.6&cells=16&source=aws")
+        self.assertEqual(grid.status, 200)
+        self.assertTrue(all(abs(v - 5) < 1e-3 for row in self.values(grid) for v in row))
 
 
 if __name__ == "__main__":

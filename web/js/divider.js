@@ -8,7 +8,7 @@
 // the line runs on straight, so it always cuts the whole outline in two.
 
 import { smoothPath } from './smooth.js';
-import { insideRowOf } from './outline.js';
+import { firstCrossing, insideRowOf } from './outline.js';
 
 const ARC_POINTS = 48;          // the far side of a half, closed round by an arc
 
@@ -46,6 +46,22 @@ export class Divider {
   path(reachM) {
     const drawn = this.drawn ? (this.smooth ? smoothPath(this.points, { closed: false }) : this.points) : [[0, -1], [0, 1]];
     return carriedOn(drawn.map(([x, y]) => this._turn(x, y)), reachM);
+  }
+
+  // Where the line, carried on past its ends, runs into itself for an outline that reaches reachM:
+  // null where it does not, else 'drawn' (between its points), 'first' (past its first point), 'last'
+  // (past its last point) or 'ends' (what runs on past the first point meets what runs on past the
+  // last). Such a line has no two sides: the test of a side would hand pieces of one place to the
+  // other, so the page refuses it.
+  crossing(reachM) {
+    const { line, second } = this.sides(reachM);
+    const found = firstCrossing(second);
+    if (!found) return null;
+    // the sides of `second`: the line's own (the first past the first point, the last past the last
+    // point), then the far side round the arc, which only a part past an end can reach
+    const pastLast = line.length - 2;
+    const first = found.includes(0), last = found.some((side) => side >= pastLast);
+    return first && last ? 'ends' : first ? 'first' : last ? 'last' : 'drawn';
   }
 
   // Which side of the line each point is on, for an outline that reaches reachM from the centre.

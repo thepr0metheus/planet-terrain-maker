@@ -1,0 +1,27 @@
+[package]
+name = "planet-terrain-maker"
+description = "The server of Planet Terrain Maker: the page, and the API the page works through."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "planet-terrain-maker"
+path = "src/main.rs"
+
+[features]
+# The tests' door: the services are asked at a local address. The image is built without it.
+test-upstream = ["services/test-upstream"]
+
+[dependencies]
+files.workspace = true
+pictures.workspace = true
+rules.workspace = true
+serde_json.workspace = true
+services.workspace = true
+wire.workspace = true
+
+[lints]
+workspace = true

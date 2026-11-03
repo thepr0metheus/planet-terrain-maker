@@ -14,6 +14,7 @@ import { DEVICE, fitCanvas } from './device.js';
 import { FullScreen } from './full-screen.js';
 import { HeaderFit } from './header-fit.js';
 import { nameOfPlaces, placesOfName } from './names.js';
+import { servicesAddress } from './services.js';
 
 const $ = (id) => document.getElementById(id);
 const CACHE_CLEARED = 'ptm.cacheCleared';     // in sessionStorage: the reload after "Clear the cache" says so
@@ -85,6 +86,7 @@ class App {
     this._langButton();
     this._themeIcon();
     this._fullScreenButton();
+    this._servicesLink();
     this._headerFit = new HeaderFit($('tools'));
     this.show('library');          // which asks the server for the list
     this.mapScreen.loadStarts();
@@ -214,6 +216,27 @@ class App {
     this.libraryScreen.render();
     if (this.mapScreen.view.world) this.mapScreen.showWorld(this.mapScreen.world, this.mapScreen.view.where());
     if (this.modelScreen.model) this.modelScreen.show(this.modelScreen.model);
+  }
+
+  // The way to the list of the home's services, first at the left of the header's buttons: every page of the home has it
+  // (the home's page scheme, "Buttons of the header"). Only where this page is one of the home's own sites.
+  _servicesLink() {
+    const address = servicesAddress(Theme.domain(location.hostname));
+    if (!address) return;
+    const slot = document.createElement('span');
+    slot.className = 'icon-slot';
+    slot.replaceChildren(Icon.make('home', 16));
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = 'Services';
+    const link = document.createElement('a');
+    link.id = 'services-btn';
+    link.className = 'btn small';
+    link.href = address;
+    link.title = 'Home services';
+    link.setAttribute('aria-label', 'Services');
+    link.append(slot, label);
+    $('tools').prepend(link);
   }
 
   _langButton() {

@@ -1,6 +1,6 @@
 # Planet Terrain Maker: HTTP API
 
-Made from `/openapi.json` by `python3 -m app.apispec`; do not edit by hand.
+Made from `/openapi.json` by `planet-terrain-maker api-doc`; do not edit by hand.
 
 No sign-in: every route is open to whoever reaches the server, as the page itself is. Run it in a private network, or behind a proxy of your own that signs people in.
 
@@ -62,6 +62,7 @@ An error that happened in the page, for the server's log.
 
 - body: {message, where, stack, page, version, details, agent, automated} as JSON; automated: true from a browser a test program drives.
 - 204: Written to the log.
+- 400: The body is not a JSON object.
 - 429: More than 30 a minute: not written.
 
 ## GET `/api/client-errors`
@@ -136,7 +137,7 @@ Rename a saved model, and its places.
 - `model_id` (path, string, required)
 - body: {"name": "...", "places": ["...", ...]} as JSON; places, a name for each place, may be left out.
 - 200: The model's meta.
-- 400: No name, or not a name for each place.
+- 400: No name, not a name for each place, or a body that is not a JSON object.
 - 404: No such model.
 
 ## DELETE `/api/models/{model_id}`
@@ -156,7 +157,7 @@ keep the model as it was).
 - `model_id` (path, string, required)
 - body: {"name": "..."} as JSON, or nothing: the copy keeps the name.
 - 201: The copy's meta, with its own id.
-- 400: An empty name.
+- 400: An empty name, or a body that is not a JSON object.
 - 404: No such model.
 
 ## GET `/api/models/{model_id}/files/{name}`
@@ -169,6 +170,7 @@ One file of a saved model.
 - 200: The file.
 - 400: most is out of range.
 - 404: No such model or file.
+- 415: most was asked of a file that is not a readable JPEG or PNG picture.
 
 ## GET `/api/packages`
 
@@ -300,7 +302,7 @@ Keep the OpenTopography key on the server, for every device.
 
 - body: {"key": "..."} as JSON.
 - 204: Kept.
-- 400: That is not a key.
+- 400: That is not a key, or the body is not a JSON object.
 
 ## DELETE `/api/settings/opentopo-key`
 
@@ -315,7 +317,7 @@ Where a world's map opens from now on, on every device.
 - `world` (path, string, required)
 - body: {"lat": ..., "lon": ..., "zoom": ...} as JSON.
 - 200: The start kept: {lat, lon, zoom}.
-- 400: An unknown world, or a point off the map.
+- 400: An unknown world, a point off the map, or a body that is not a JSON object.
 
 ## DELETE `/api/settings/start/{world}`
 

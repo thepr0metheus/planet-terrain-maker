@@ -10,7 +10,8 @@
 // Coordinates are millimetres: x east, y north, z up, the bottom at z = 0, the frame's centre at
 // x = y = 0. The view turns them to three.js's y-up; STL and 3MF take them as they are.
 
-import { ShapeUtils, Vector2 } from '../vendor/three/three.module.js';
+import { EarClipper } from './ear-clipper.js';
+import { WELD_MM } from './exporters.js';
 
 // Nodes along the longer side of the frame.
 export const DETAIL = { low: 200, standard: 400, fine: 700 };
@@ -18,6 +19,13 @@ export const DETAIL = { low: 200, standard: 400, fine: 700 };
 export const GROUP = { top: 0, side: 1, bottom: 2 };
 
 export class OutlineTooSmall extends Error {}
+
+// Where the outline crosses an edge of the grid, the crossing is kept at least this far from the
+// edge's nodes. An outline that runs through a node would put the crossings of the edges round it
+// all at the node's own point; the weld of a 3MF, and a slicer reading an STL, make them one
+// vertex, and a wall that touches itself along a vertical line is not a solid. A few times the
+// weld's grid is nothing on a model.
+const APART_MM = 5 * WELD_MM;
 
 // heights: a HeightGrid over the frame (no holes: HeightGrid.filled()). frame: { widthM, heightM }.
 // outline: CircleOutline or PolygonOutline, in metres about the frame's centre.
@@ -31,6 +39,7 @@ export function buildTerrainMesh({ heights, frame, outline, sizeMm = 100, zScale
   const bounds = outline.bounds;
   const mmPerM = sizeMm / Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
   const zMmPerM = mmPerM * zScale;
+  const apartM = APART_MM / mmPerM;
 
   const xs = new Float64Array(nx), ys = new Float64Array(ny);
   for (let i = 0; i < nx; i++) xs[i] = (i / (nx - 1) - 0.5) * W;
@@ -44,6 +53,7 @@ export function buildTerrainMesh({ heights, frame, outline, sizeMm = 100, zScale
     row[nx - 1] = 0;
     inside.set(row, j * nx);
   }
+  fillPits(inside, nx, ny, xs, ys, outline);
 
   const nodeH = new Float32Array(nx * ny);
   for (let j = 0; j < ny; j++) {
@@ -75,7 +85,8 @@ export function buildTerrainMesh({ heights, frame, outline, sizeMm = 100, zScale
     const ids = ja === jb ? rowEdgeId : colEdgeId;
     const key = Math.min(ja, jb) * nx + Math.min(ia, ib);
     if (ids[key] < 0) {
-      const t = outline.crossing(xs[ia], ys[ja], xs[ib], ys[jb]);
+      const apart = apartM / Math.hypot(xs[ib] - xs[ia], ys[jb] - ys[ja]);       // as a part of the edge
+      const t = Math.min(1 - apart, Math.max(apart, outline.crossing(xs[ia], ys[ja], xs[ib], ys[jb])));
       const ha = nodeH[ja * nx + ia], hb = nodeH[jb * nx + ib];
       ids[key] = addPoint(xs[ia] + t * (xs[ib] - xs[ia]), ys[ja] + t * (ys[jb] - ys[ja]), ha + t * (hb - ha), true);
     }
@@ -174,12 +185,11 @@ export function buildTerrainMesh({ heights, frame, outline, sizeMm = 100, zScale
   for (const loop of loops) {
     const first = next;
     for (const p of loop) put(next++, p, 0);
-    const contour = loop.map((p) => new Vector2(P.x[p], P.y[p]));
-    for (const [a, b, c] of ShapeUtils.triangulateShape([...contour], [])) {
-      // Facing down: the loop runs anticlockwise seen from above, so each triangle is turned over.
-      const ccw = ShapeUtils.isClockWise([contour[a], contour[b], contour[c]]) ? [first + a, first + c, first + b] : [first + a, first + b, first + c];
-      indices.push(ccw[0], ccw[2], ccw[1]);
-    }
+    // The loop runs anticlockwise seen from above, and so do its triangles; the bottom faces down,
+    // so each is turned over. All of them the same way: none is judged by its own turn, which for
+    // a sliver along a straight side is rounding.
+    const cut = new EarClipper(loop.map((p) => P.x[p]), loop.map((p) => P.y[p])).triangles();
+    for (let k = 0; k < cut.length; k += 3) indices.push(first + cut[k], first + cut[k + 2], first + cut[k + 1]);
   }
   group(GROUP.bottom, from);
 
@@ -209,6 +219,40 @@ export function topMm(mesh, u, v) {
   const sw = heights[(j + 1) * nx + i], se = heights[(j + 1) * nx + i + 1];
   const h = s + w <= 1 ? nw + s * (ne - nw) + w * (sw - nw) : se + (1 - s) * (sw - se) + (1 - w) * (ne - se);
   return mesh.baseMm + (h - mesh.lowestM) * mesh.zMmPerM;
+}
+
+// A model has no hole through it: its outline is one curve. But a notch of the outline narrower
+// than a cell can end in a widening round a node of the grid, with the ground all round that node
+// and no way out for the outside but through the notch, where there is no node: in the grid's
+// terms a pit with no way out. Such a node is made ground, as the notch is: a detail smaller than
+// a cell is not kept. The way out of the grid goes along its edges, or across a cell with only two
+// opposite nodes inside when the cell's middle is outside (the cut that keeps its two pieces apart).
+function fillPits(inside, nx, ny, xs, ys, outline) {
+  const reached = new Uint8Array(nx * ny);
+  const queue = new Int32Array(nx * ny);
+  let from = 0, to = 0;
+  const reach = (k) => {
+    if (inside[k] || reached[k]) return;
+    reached[k] = 1;
+    queue[to++] = k;
+  };
+  for (let i = 0; i < nx; i++) { reach(i); reach((ny - 1) * nx + i); }
+  for (let j = 0; j < ny; j++) { reach(j * nx); reach(j * nx + nx - 1); }
+  while (from < to) {
+    const k = queue[from++], i = k % nx, j = (k - i) / nx;
+    if (i > 0) reach(k - 1);
+    if (i < nx - 1) reach(k + 1);
+    if (j > 0) reach(k - nx);
+    if (j < ny - 1) reach(k + nx);
+    for (let dj = -1; dj <= 1; dj += 2) {
+      for (let di = -1; di <= 1; di += 2) {
+        const a = i + di, b = j + dj;
+        if (a < 0 || a >= nx || b < 0 || b >= ny) continue;
+        if (inside[j * nx + a] && inside[b * nx + i] && !outline.contains((xs[i] + xs[a]) / 2, (ys[j] + ys[b]) / 2)) reach(b * nx + a);
+      }
+    }
+  }
+  for (let k = 0; k < inside.length; k++) if (!reached[k]) inside[k] = 1;
 }
 
 // The outline's segments as closed loops of points, each in the segments' own order.

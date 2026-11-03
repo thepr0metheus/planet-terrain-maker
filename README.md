@@ -4,9 +4,9 @@ Make a solid 3D model of any place on Earth, the Moon, Mars or Venus: to look at
 on a 3D printer, or to stand on your table in AR. Two places from any worlds can share one round
 model at the same scale: a lunar crater next to Mount Elbrus, Olympus Mons next to Everest.
 
-It is self-hosted: a small Python server and a single page, with no build step and no accounts. The
-server relays the map tiles, heights and names the page needs, keeps the models you save, and serves
-the same library to every device on your network.
+It is self-hosted: a small server in Rust and a single page, with no build step for the page and no
+accounts. The server relays the map tiles, heights and names the page needs, keeps the models you save,
+and serves the same library to every device on your network.
 
 ![Olympus Mons and Mount Everest on one model, at the same scale](docs/images/hero.jpg)
 
@@ -53,7 +53,7 @@ the same library to every device on your network.
   the ground with its height over it; the labels come large, medium or small, or hide, as the browser
   remembers. A click on one makes the view turn about it. A saved model keeps its asteroids, where they
   stood, as high and as turned. The shapes are fetched by the server the first time and kept
-  (`app/shapes.py`); the lists are made by `tools/asteroids.py`.
+  (`crates/services/src/shape_files.rs`); the lists are made by `tools/asteroids.py`.
 - **Comets and spacecraft at their real size** too, each under a button of its own and placed the same
   way: five comets seen up close (67P/Churyumov–Gerasimenko, 9P/Tempel 1, 103P/Hartley 2, 81P/Wild 2,
   1P/Halley), and eleven rockets with the ISS. Saturn V, the Space Shuttle and the station are NASA's own
@@ -93,11 +93,12 @@ docker compose up -d --build
 Then open http://localhost:8080. The library, the tile cache and the settings stay in the volume
 `ptm-data`.
 
-From the source, with Python 3.13:
+From the source, with Rust (the version in `rust-toolchain.toml`, which rustup installs), in the
+repository's folder: the server serves the `web/` of the folder it starts in.
 
 ```bash
-python3 -m pip install -r requirements.txt
-APP_PORT=8080 python3 -m app
+cargo build --release -p planet-terrain-maker
+APP_PORT=8080 target/release/planet-terrain-maker
 ```
 
 | Variable | Default | What it sets |
@@ -155,27 +156,19 @@ or behind a reverse proxy of your own that signs people in.
 
 ## How it is built
 
-The server (`app/`, Flask) serves the page and relays the built-in data sources. Your own picture
-sources are the exception: the browser reads their tiles itself, over HTTPS with CORS and without
-cookies, and the server never fetches an address a user typed:
+The server (`crates/`, Rust, one binary) serves the page and relays the built-in data sources. Your own
+picture sources are the exception: the browser reads their tiles itself, over HTTPS with CORS and
+without cookies, and the server never fetches an address a user typed. Its crates depend only on those
+below them:
 
-| Module | What it does |
+| Crate | What it does |
 |---|---|
-| `tiles.py` | map tiles of every world through `/api/tile/...`, kept on disk (`data/cache/tiles`, at most `TILE_CACHE_MB`) |
-| `copdem.py` | Copernicus DEM from AWS Open Data: Cloud Optimized GeoTIFFs read by range, inflated and un-predicted with numpy, kept on disk |
-| `earth.py`, `grids.py` | Copernicus heights from OpenTopography as a float32 grid |
-| `planets.py` | the Moon's, Mars's and Venus's heights and pictures from NASA Trek (and SLDEM2015) |
-| `places.py` | Nominatim search and place names, one request a second, answers kept |
-| `buildings.py` | OpenStreetMap buildings through Overpass, mirrors in turn, answers kept |
-| `pictures.py` | smaller copies of saved pictures for devices that hold less (`?most=4096`) |
-| `shapes.py` | the shapes of asteroids, comets and spacecraft, from NASA, JAXA, the PDS and DAMIT, fetched once and kept on disk (`data/cache/asteroids`) |
-| `library.py` | the saved models in `data/models`; removed ones wait 30 days in `data/trash` |
-| `keys.py` | the OpenTopography key, set on the page and kept in `data/keys` (mode 600), never sent back |
-| `settings.py` | where each world's map opens and your set of flight speeds, the same on every device |
-| `picture_sources.py` | user-entered source history in `data/picture-sources.json`, outside git, shared between devices |
-| `detail_tiles.py` | close-up tiles of your own picture sources, sent by the browser, checked and kept in `data/picture-tiles` |
-| `apispec.py` | `/openapi.json` from the routes, and `docs/http-api.md` from it |
-| `packages.py` | what this copy runs on, for a check of known vulnerabilities (`GET /api/packages`) |
+| `rules` | what is valid and how a thing is computed: regions and grids of heights, the tile layers, NASA Trek and SLDEM2015, the Copernicus files, the answers of Nominatim and Overpass, models, settings, picture sources. Values alone: no file, socket or clock |
+| `wire` | HTTP/1.1 requests and multipart bodies |
+| `pictures` | JPEG and PNG, and nothing else: smaller copies of saved pictures for devices that hold less (`?most=4096`), the check of uploaded tiles |
+| `files` | the data folder: the saved models in `data/models` (removed ones wait 30 days in `data/trash`), where each world's map opens and your set of flight speeds, the OpenTopography key (`data/keys`, mode 600, never sent back), the picture sources (`data/picture-sources.json`, outside git), close-up tiles of your own sources (`data/picture-tiles`), the page's error reports, and the tile cache (at most `TILE_CACHE_MB`) |
+| `services` | the services the data comes from: map tiles of every world through `/api/tile/...`, Copernicus DEM from AWS Open Data (Cloud Optimized GeoTIFFs read by range and kept on disk), Copernicus through OpenTopography, the Moon's, Mars's and Venus's heights and pictures from NASA Trek, Nominatim (one request a second, answers kept), Overpass (mirrors in turn, answers kept), the shapes of asteroids, comets and spacecraft (`data/cache/asteroids`) |
+| `server` | the routes and their table, from which `/openapi.json` and `docs/http-api.md` are made; what this copy runs on (`GET /api/packages`); the process |
 
 The page (`web/`) is ES modules with no build step. `ui.css`, `ui.js` and `theme.js` hold the base
 look and a few small tools; `style.css` and `web/js/` hold the app. three.js 0.186.1 and Leaflet
@@ -190,14 +183,18 @@ written from the mesh (`exporters.js`, `export-scene.js`).
 
 ```bash
 npm ci && npm test                                    # the page's code (node --test)
-python3 -m pip install -r requirements.txt
-npm run test:py                                       # the server
-python3 -m app.apispec > docs/http-api.md             # after a change of the API (a test checks they agree)
+cargo test --workspace                                # the server's own tests
+python3 -m pip install pillow && npm run test:py      # the server over HTTP, with the services faked
+python3 tools/check_rust_contract.py                  # how the server's code is written
+target/debug/planet-terrain-maker api-doc > docs/http-api.md   # after a change of the API (a test checks they agree)
 ```
+
+The HTTP tests start the binary built with the feature `test-upstream`: it asks a local fake in place of the
+real services. The image is built without it.
 
 The HTTP API is described at `/openapi.json` and in [docs/http-api.md](docs/http-api.md).
 
-`GET /api/packages` lists what a running copy is made of: its Python libraries, the page's libraries
+`GET /api/packages` lists what a running copy is made of: its Rust libraries, the page's libraries
 and the system's packages, each named as [osv.dev](https://osv.dev) names it. Send them to osv.dev's
 `/v1/querybatch` as they are to learn which have known vulnerabilities.
 

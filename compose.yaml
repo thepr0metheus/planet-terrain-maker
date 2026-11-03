@@ -6,6 +6,7 @@ services:
   planet-terrain-maker:
     build: .
     image: planet-terrain-maker:latest
+    init: true              # the binary has no handler of signals: tini stops it at once
     ports:
       - "8080:8080"
     volumes:
